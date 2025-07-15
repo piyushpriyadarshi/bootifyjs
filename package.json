@@ -1,0 +1,64 @@
+{
+  "name": "bootifyjs",
+  "version": "0.1.1",
+  "description": "Spring Boot inspired Node.js framework with custom DI",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "ts-node src/examples/basic-api.ts",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:benchmark": "ts-node tests/core/router.benchmark.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "nodejs",
+    "framework",
+    "spring-boot",
+    "dependency-injection",
+    "typescript"
+  ],
+  "author": "BootifyJS",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^20.0.0",
+    "@vitest/coverage-v8": "^3.2.4",
+    "autocannon": "^8.0.0",
+    "jest": "^30.0.4",
+    "ts-jest": "^29.4.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0",
+    "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "@clickhouse/client": "^0.2.10",
+    "pino": "^9.7.0",
+    "pino-pretty": "^13.0.0",
+    "pino-roll": "^3.1.0",
+    "reflect-metadata": "^0.1.13",
+    "zod": "^3.22.4"
+  },
+  "peerDependencies": {
+    "typescript": ">=4.5.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bootifyjs/bootifyjs.git"
+  },
+  "bugs": {
+    "url": "https://github.com/bootifyjs/bootifyjs/issues"
+  },
+  "homepage": "https://github.com/bootifyjs/bootifyjs"
+}
