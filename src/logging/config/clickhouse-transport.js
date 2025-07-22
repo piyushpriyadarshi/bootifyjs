@@ -156,14 +156,19 @@ module.exports = async function clickHouseTransport(options) {
     if (recordsToFlush.length === 0) return
 
     // Format records before sending
-    const formattedBatch = recordsToFlush.map((record) => ({
-      ...record,
-      timestamp: formatClickHouseDateTime(record.timestamp),
-      // Ensure JSON fields are properly stringified
-      context: record.context ? JSON.stringify(record.context) : {},
-      error: record.error ? JSON.stringify(record.error) : null,
-      // Add other JSON fields as needed
-    }))
+    const formattedBatch = recordsToFlush.map((record) => {
+      // console.log('Individual record', record)
+
+      return {
+        ...record,
+        timestamp: formatClickHouseDateTime(record.timestamp),
+        // Ensure JSON fields are properly stringified
+        context: record.context ? JSON.stringify(record.context) : {},
+        error: record.error || null,
+        // Add other JSON fields as needed
+      }
+    })
+    console.log('--- Sending to ClickHouse ---', JSON.stringify(formattedBatch, null, 2))
 
     try {
       await client.insert({
@@ -311,6 +316,7 @@ module.exports = async function clickHouseTransport(options) {
         }
 
         if (batch) {
+          // console.log('clickhouse record', record)
           batch.push(record)
         }
 

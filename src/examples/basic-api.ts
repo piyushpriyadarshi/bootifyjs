@@ -12,7 +12,11 @@ import {
 } from '../events'
 import { EventHandler } from '../events/decorators/event.decorators'
 // import { EventHandler } from '../events/types/event.types'
-import { Logger } from '../logging'
+import { LogContextService, Logger, LoggerService } from '../logging'
+// import logger from '../client/Logger'
+import { requestContext } from '../middlewares/requestcontext.middleware'
+import { FastifyAdapter } from '../core/fastify-adapter'
+import { UserController } from '../controllers/user.controller'
 
 // Define a simple repository
 @Repository()
@@ -67,6 +71,7 @@ class TodoService {
   constructor(private repository: TodoRepository) {}
 
   getAllTodos() {
+    // logger.info('hello')
     this.logger.info('Getting all todos')
     return this.repository.findAll()
   }
@@ -114,11 +119,19 @@ class TodoEventHandlers {
 
 // Define a controller
 @Controller('/todos')
+@Logger('TodoController')
 class TodoController {
+  private logger?: LoggerService
   constructor(private todoService: TodoService) {}
 
   @Get('/')
   getAllTodos() {
+    console.log('LogContextService.getContext()', LogContextService.getContext())
+    this.logger?.info('Hello from controller')
+    LoggerService.getInstance().info('hello from controller')
+    // console.log(requestContext.getStore())
+    // logger.info('hello from controller')
+
     return this.todoService.getAllTodos()
   }
 
@@ -138,7 +151,26 @@ class HealthController {
   }
 }
 // Start the application
-// async function main() {
+async function main() {
+  // Register event handlers
+  // registerEventHandlers([TodoEventHandlers])
+
+  const { start, app } = await createBootifyApp({
+    port: 3000,
+    controllers: [TodoController, HealthController, UserController],
+    enableSwagger: true,
+    adapter: new FastifyAdapter(),
+  })
+  const server = app.getServer()
+  server.timeout = 5000 // Set connection timeout
+  server.keepAliveTimeout = 5000 // Adjust keep-alive
+
+  await start()
+  console.log('Todo API is running on http://localhost:3000')
+  console.log('API docs available at http://localhost:3000/api-docs')
+}
+
+// async function startWorker() {
 //   // Register event handlers
 //   registerEventHandlers([TodoEventHandlers])
 
@@ -147,77 +179,59 @@ class HealthController {
 //     controllers: [TodoController, HealthController],
 //     enableSwagger: true,
 //   })
+
 //   const server = app.getServer()
-//   server.timeout = 5000 // Set connection timeout
-//   server.keepAliveTimeout = 5000 // Adjust keep-alive
+//   server.timeout = 5000
+//   server.keepAliveTimeout = 5000
 
 //   await start()
-//   console.log('Todo API is running on http://localhost:3000')
-//   console.log('API docs available at http://localhost:3000/api-docs')
+//   console.log(`Worker ${process.pid} started`)
 // }
 
-async function startWorker() {
-  // Register event handlers
-  registerEventHandlers([TodoEventHandlers])
+// async function main() {
+//   const cpuCount = os.cpus().length
 
-  const { start, app } = await createBootifyApp({
-    port: 3000,
-    controllers: [TodoController, HealthController],
-    enableSwagger: true,
-  })
+//   if (cluster.isPrimary) {
+//     console.log(`Primary ${process.pid} is running`)
+//     console.log(`Forking ${cpuCount} workers...`)
 
-  const server = app.getServer()
-  server.timeout = 5000
-  server.keepAliveTimeout = 5000
+//     // Fork workers
+//     for (let i = 0; i < cpuCount; i++) {
+//       cluster.fork()
+//     }
 
-  await start()
-  console.log(`Worker ${process.pid} started`)
-}
+//     // Handle worker exit with proper type checking
+//     cluster.on('exit', (worker: Worker, code: number, signal: string) => {
+//       console.log(`Worker ${worker.process.pid} died`)
+//       console.log('Forking a new worker...')
+//       cluster.fork()
+//     })
 
-async function main() {
-  const cpuCount = os.cpus().length
+//     // Zero-downtime restarts with type safety
+//     process.on('SIGUSR2', () => {
+//       const workers = cluster.workers ? Object.values(cluster.workers) : []
 
-  if (cluster.isPrimary) {
-    console.log(`Primary ${process.pid} is running`)
-    console.log(`Forking ${cpuCount} workers...`)
+//       function restartWorker(i: number) {
+//         if (i >= workers.length) return
 
-    // Fork workers
-    for (let i = 0; i < cpuCount; i++) {
-      cluster.fork()
-    }
+//         const worker = workers[i]
+//         if (!worker) return
 
-    // Handle worker exit with proper type checking
-    cluster.on('exit', (worker: Worker, code: number, signal: string) => {
-      console.log(`Worker ${worker.process.pid} died`)
-      console.log('Forking a new worker...')
-      cluster.fork()
-    })
+//         worker.once('exit', (code: number, signal: string) => {
+//           if (!worker.exitedAfterDisconnect) return
+//           const newWorker = cluster.fork()
+//           newWorker.once('listening', () => restartWorker(i + 1))
+//         })
 
-    // Zero-downtime restarts with type safety
-    process.on('SIGUSR2', () => {
-      const workers = cluster.workers ? Object.values(cluster.workers) : []
+//         worker.disconnect()
+//       }
 
-      function restartWorker(i: number) {
-        if (i >= workers.length) return
-
-        const worker = workers[i]
-        if (!worker) return
-
-        worker.once('exit', (code: number, signal: string) => {
-          if (!worker.exitedAfterDisconnect) return
-          const newWorker = cluster.fork()
-          newWorker.once('listening', () => restartWorker(i + 1))
-        })
-
-        worker.disconnect()
-      }
-
-      restartWorker(0)
-    })
-  } else {
-    await startWorker()
-  }
-}
+//       restartWorker(0)
+//     })
+//   } else {
+//     await startWorker()
+//   }
+// }
 
 // Run if this file is executed directly
 if (require.main === module) {

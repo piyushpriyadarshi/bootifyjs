@@ -6,7 +6,7 @@ import clickHouseTransport from '../transports/clickhouse.transport1'
 export class LoggingConfigService {
   static async createConfig(): Promise<LoggingConfig> {
     const environment = process.env.NODE_ENV || 'development'
-    const isDevelopment = environment === 'development'
+    const isDevelopment = environment === 'developmentj'
 
     const config: LoggingConfig = {
       level: (process.env.LOG_LEVEL as any) || (isDevelopment ? 'trace' : 'info'),
@@ -149,23 +149,23 @@ export class LoggingConfigService {
         //     enabled: false,
         //   },
         // })
-        transports.push({
-          level: 'info',
-          // target: './clickhouse-transport.js',
-          target: path.join(__dirname, 'clickhouse-transport.js'),
-          options: {
-            url: process.env.CLICKHOUSE_URL || 'http://localhost:8123',
-            username: process.env.CLICKHOUSE_USER || 'default',
-            password: process.env.CLICKHOUSE_PASSWORD || '',
-            database: process.env.CLICKHOUSE_DB || 'default',
-            application: process.env.APP_NAME || 'my-application',
-          },
-        })
+        // transports.push({
+        //   level: 'info',
+        //   // target: './clickhouse-transport.js',
+        //   target: path.join(__dirname, 'clickhouse-transport.js'),
+        //   options: {
+        //     url: process.env.CLICKHOUSE_URL || 'http://localhost:8123',
+        //     username: process.env.CLICKHOUSE_USER || 'default',
+        //     password: process.env.CLICKHOUSE_PASSWORD || '',
+        //     database: process.env.CLICKHOUSE_DB || 'default',
+        //     application: process.env.APP_NAME || 'my-application',
+        //   },
+        // })
       } catch (error) {
         console.error('[LoggingConfigService] Failed to initialize ClickHouse transport:', error)
       }
     }
-    console.log(transports)
+    // console.log(transports)
 
     return transports
   }
