@@ -1,0 +1,68 @@
+{
+  "name": "bootifyjs",
+  "version": "1.1.8",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "npm run clean && tsc",
+    "prepublishOnly": "npm run build",
+    "dev": "nodemon --watch src --exec ts-node src/examples/index.ts"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./core": {
+      "import": "./dist/core/index.js",
+      "require": "./dist/core/index.js",
+      "types": "./dist/core/index.d.ts"
+    },
+    "./events": {
+      "import": "./dist/events/index.js",
+      "require": "./dist/events/index.js",
+      "types": "./dist/events/index.d.ts"
+    },
+    "./cache": {
+      "import": "./dist/core/cache/index.js",
+      "require": "./dist/core/cache/index.js",
+      "types": "./dist/core/cache/index.d.ts"
+    },
+    "./logging": {
+      "import": "./dist/logging/index.js",
+      "require": "./dist/logging/index.js",
+      "types": "./dist/logging/index.d.ts"
+    },
+    "./config": {
+      "import": "./dist/config/index.js",
+      "require": "./dist/config/index.js",
+      "types": "./dist/config/index.d.ts"
+    }
+  },
+  "dependencies": {
+    "fastify": "^5.4.0",
+    "reflect-metadata": "^0.2.2",
+    "zod": "^3.25.76",
+    "zod-to-json-schema": "^3.24.6"
+  },
+  "devDependencies": {
+    "@fastify/swagger": "^9.5.1",
+    "@fastify/swagger-ui": "^5.2.3",
+    "@types/dotenv": "^6.1.1",
+    "@types/node": "^24.1.0",
+    "dotenv": "^17.2.1",
+    "nodemon": "^3.1.10",
+    "pino-pretty": "^13.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  }
+}
