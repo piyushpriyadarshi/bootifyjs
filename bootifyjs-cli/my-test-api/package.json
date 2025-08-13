@@ -1,0 +1,30 @@
+{
+  "name": "my-test-api",
+  "version": "1.0.0",
+  "description": "test app",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "nodemon --watch src --exec ts-node src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix"
+  },
+  "author": "piyush",
+  "license": "ISC",
+  "dependencies": {
+    "bootifyjs": "^1.1.9",
+    "fastify": "^5.4.0",
+    "reflect-metadata": "^0.2.2",
+    "zod": "^3.25.76",
+    "dotenv": "^17.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "ts-node": "^10.9.0",
+    "nodemon": "^3.1.0"
+  }
+}

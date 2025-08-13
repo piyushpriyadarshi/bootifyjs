@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Tracing Dashboard</title>
+    <link rel="stylesheet" href="/enhanced-styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Header -->
+        <header class="dashboard-header">
+            <h1><i class="fas fa-chart-line"></i> Observability Dashboard</h1>
+            <div class="header-controls">
+                <div class="time-range-selector">
+                    <select id="timeRange">
+                        <option value="1h">Last Hour</option>
+                        <option value="24h">Last 24 Hours</option>
+                        <option value="7d">Last 7 Days</option>
+                    </select>
+                </div>
+                <button id="refreshBtn" class="btn btn-primary">
+                    <i class="fas fa-sync-alt"></i> Refresh
+                </button>
+            </div>
+        </header>
+
+        <!-- Tab Navigation -->
+        <nav class="tab-navigation">
+            <button class="tab-btn active" data-tab="logs-explorer">
+                <i class="fas fa-list-alt"></i> Logs Explorer
+            </button>
+            <button class="tab-btn" data-tab="traces">
+                <i class="fas fa-project-diagram"></i> Traces
+            </button>
+            <button class="tab-btn" data-tab="metrics">
+                <i class="fas fa-chart-bar"></i> Metrics
+            </button>
+            <button class="tab-btn" data-tab="service-map">
+                <i class="fas fa-sitemap"></i> Service Map
+            </button>
+        </nav>
+
+        <!-- Logs Explorer Tab -->
+        <div id="logs-explorer" class="tab-content active">
+            <div class="logs-controls">
+                <div class="search-filters">
+                    <div class="filter-group">
+                        <label>Request ID:</label>
+                        <input type="text" id="requestIdFilter" placeholder="Enter request ID...">
+                    </div>
+                    <div class="filter-group">
+                        <label>Service:</label>
+                        <select id="serviceFilter">
+                            <option value="">All Services</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Level:</label>
+                        <select id="levelFilter">
+                            <option value="">All Levels</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Message:</label>
+                        <input type="text" id="messageFilter" placeholder="Search in messages...">
+                    </div>
+                    <button id="searchLogsBtn" class="btn btn-primary">
+                        <i class="fas fa-search"></i> Search
+                    </button>
+                    <button id="clearFiltersBtn" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> Clear
+                    </button>
+                </div>
+                
+                <div class="view-controls">
+                    <div class="view-mode-selector">
+                        <button class="view-btn active" data-view="table">
+                            <i class="fas fa-table"></i> Table
+                        </button>
+                        <button class="view-btn" data-view="list">
+                            <i class="fas fa-list"></i> List
+                        </button>
+                        <button class="view-btn" data-view="json">
+                            <i class="fas fa-code"></i> JSON
+                        </button>
+                    </div>
+                    <div class="export-controls">
+                        <button id="exportLogsBtn" class="btn btn-outline">
+                            <i class="fas fa-download"></i> Export
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="logs-results">
+                <div id="logsTableView" class="logs-view active">
+                    <table class="logs-table">
+                        <thead>
+                            <tr>
+                                <th data-sort="timestamp">Timestamp <i class="fas fa-sort"></i></th>
+                                <th data-sort="level">Level <i class="fas fa-sort"></i></th>
+                                <th data-sort="serviceName">Service <i class="fas fa-sort"></i></th>
+                                <th data-sort="message">Message <i class="fas fa-sort"></i></th>
+                                <th data-sort="requestId">Request ID <i class="fas fa-sort"></i></th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logsTableBody">
+                            <!-- Logs will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div id="logsListView" class="logs-view">
+                    <div id="logsListContainer">
+                        <!-- List view logs will be populated here -->
+                    </div>
+                </div>
+                
+                <div id="logsJsonView" class="logs-view">
+                    <pre id="logsJsonContainer">
+                        <!-- JSON view logs will be populated here -->
+                    </pre>
+                </div>
+            </div>
+
+            <div class="pagination">
+                <button id="prevPageBtn" class="btn btn-outline" disabled>
+                    <i class="fas fa-chevron-left"></i> Previous
+                </button>
+                <span id="pageInfo">Page 1 of 1</span>
+                <button id="nextPageBtn" class="btn btn-outline" disabled>
+                    Next <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Other tabs content... -->
+        <div id="traces" class="tab-content">
+            <!-- Traces content -->
+        </div>
+        
+        <div id="metrics" class="tab-content">
+            <!-- Metrics content -->
+        </div>
+        
+        <div id="service-map" class="tab-content">
+            <!-- Service map content -->
+        </div>
+    </div>
+
+    <script src="/enhanced-dashboard.js"></script>
+</body>
+</html>

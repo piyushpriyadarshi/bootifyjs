@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Distributed Tracing Dashboard</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔍 Distributed Tracing Dashboard</h1>
+            <div class="controls">
+                <button id="refreshBtn" class="btn btn-primary">Refresh</button>
+                <input type="search" id="searchInput" placeholder="Search requests..." class="search-input">
+            </div>
+        </header>
+
+        <main>
+            <div id="loadingSpinner" class="loading">Loading requests...</div>
+            <div id="requestsList" class="requests-list"></div>
+        </main>
+    </div>
+
+    <script src="/dashboard.js"></script>
+</body>
+</html>

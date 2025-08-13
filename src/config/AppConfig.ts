@@ -18,7 +18,7 @@ const LoggingConfigSchema = z.object({
   // ClickHouse Configuration
   CLICKHOUSE_ENABLED: z
     .preprocess((val) => String(val).toLowerCase() === 'true', z.boolean())
-    .default(false),
+    .default(true),
   CLICKHOUSE_URL: z.string().url().default('http://localhost:8123'),
   CLICKHOUSE_USER: z.string().default('default'),
   CLICKHOUSE_PASSWORD: z.string().default(''),

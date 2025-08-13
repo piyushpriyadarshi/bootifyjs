@@ -1,5 +1,6 @@
 import { Autowired, Component, Service } from '../../core/decorators'
 import { EventBusService } from '../../events/event-bus.service'
+import { TracingService } from '../../logging/core/tracing.service'
 import { TodoCreatedEvent } from '../events/todo.events'
 import { TodoRepository } from '../repositories/todo.repository'
 
@@ -9,6 +10,8 @@ export class TodoService {
 
   @Autowired()
   private readonly eventBus!: EventBusService
+  @Autowired(TracingService)
+  private tracingService!: TracingService
 
   @Autowired()
   private readonly repository!: TodoRepository
@@ -28,8 +31,13 @@ export class TodoService {
   }
 
   createTodo(text: string) {
+    const span = this.tracingService.spanStart('create.todo.service', {
+      name: 'create todo service',
+      hello: 'piyush',
+    })
     const newTodo = this.repository.create(text)
     this.eventBus.emit(new TodoCreatedEvent({ ...newTodo, createdAt: new Date() }))
+    this.tracingService.spanEnd(span, 'ok')
     return newTodo
   }
 }

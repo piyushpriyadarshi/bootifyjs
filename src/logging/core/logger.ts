@@ -34,4 +34,7 @@ export class Logger {
   public access(payload: object) {
     this.logger.info({ ...payload, logType: 'access' }, 'Access Log')
   }
+  public span(payload: object) {
+    this.logger.info({ ...payload, logType: 'span' }, 'Span')
+  }
 }

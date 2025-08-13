@@ -2,6 +2,7 @@ import pino from 'pino'
 import { LoggingConfigService } from '../config/logging.config'
 import { container, requestContextStore } from '../../core'
 import { AppConfig } from '../../config/AppConfig'
+import path from 'path'
 
 // 1. Define a unique DI token for our logger instance
 export const LOGGER_TOKEN = Symbol.for('Logger')
@@ -50,15 +51,27 @@ export const loggerFactory = (): pino.Logger => {
 
   // Add ClickHouse transport if enabled
   if (appConfig.get('CLICKHOUSE_ENABLED')) {
+    // transportTargets.push({
+    //   target: './clickhouse.transport.js', // Path relative to the running script
+    //   level: 'info',
+    //   options: {
+    //     url: appConfig.get('CLICKHOUSE_URL'),
+    //     username: appConfig.get('CLICKHOUSE_USER'),
+    //     password: appConfig.get('CLICKHOUSE_PASSWORD'),
+    //     database: appConfig.get('CLICKHOUSE_DB'),
+    //     application: appConfig.get('SERVICE_NAME'),
+    //   },
+    // })
     transportTargets.push({
-      target: './clickhouse.transport.js', // Path relative to the running script
       level: 'info',
+      // target: './clickhouse-transport.js',
+      target: path.join(__dirname, 'clickhouse-transport.js'),
       options: {
-        url: appConfig.get('CLICKHOUSE_URL'),
-        username: appConfig.get('CLICKHOUSE_USER'),
-        password: appConfig.get('CLICKHOUSE_PASSWORD'),
-        database: appConfig.get('CLICKHOUSE_DB'),
-        application: appConfig.get('SERVICE_NAME'),
+        url: process.env.CLICKHOUSE_URL || 'http://localhost:8123',
+        username: process.env.CLICKHOUSE_USER || 'default',
+        password: process.env.CLICKHOUSE_PASSWORD || '',
+        database: process.env.CLICKHOUSE_DB || 'default',
+        application: process.env.APP_NAME || 'my-application',
       },
     })
   }
