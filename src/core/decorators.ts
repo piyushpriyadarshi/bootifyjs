@@ -3,16 +3,17 @@ import { z, ZodSchema } from 'zod'
 import { FastifyRequest, FastifyReply } from 'fastify'
 import { ComponentOptions, container, Scope } from './di-container'
 import { registeredComponents } from './component-registry'
+import { FRAMEWORK_METADATA_KEYS } from '../constants'
 
 // --- Metadata Keys ---
 export const METADATA_KEYS = {
-  controllerPrefix: 'bootify:controller-prefix',
-  routes: 'bootify:routes',
-  validationSchema: 'bootify:validation-schema',
-  paramTypes: 'bootify:param-types',
-  middleware: 'bootify:middleware',
-  autowiredProperties: 'bootify:autowired-properties',
-  autowiredParams: 'bootify:autowired-params',
+  controllerPrefix: FRAMEWORK_METADATA_KEYS.CONTROLLER_PREFIX,
+  routes: FRAMEWORK_METADATA_KEYS.ROUTES,
+  validationSchema: FRAMEWORK_METADATA_KEYS.VALIDATION_SCHEMA,
+  paramTypes: FRAMEWORK_METADATA_KEYS.PARAM_TYPES,
+  middleware: FRAMEWORK_METADATA_KEYS.MIDDLEWARE,
+  autowiredProperties: FRAMEWORK_METADATA_KEYS.AUTOWIRED_PROPERTIES,
+  autowiredParams: FRAMEWORK_METADATA_KEYS.AUTOWIRED_PARAMS,
 }
 
 export type FastifyMiddleware = (

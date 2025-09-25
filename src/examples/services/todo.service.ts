@@ -30,14 +30,14 @@ export class TodoService {
     return todo
   }
 
-  createTodo(text: string) {
-    const span = this.tracingService.spanStart('create.todo.service', {
-      name: 'create todo service',
-      hello: 'piyush',
-    })
+  async createTodo(text: string) {
+    // const span = this.tracingService.spanStart('create.todo.service', {
+    //   name: 'create todo service',
+    //   hello: 'piyush',
+    // })
     const newTodo = this.repository.create(text)
-    this.eventBus.emit(new TodoCreatedEvent({ ...newTodo, createdAt: new Date() }))
-    this.tracingService.spanEnd(span, 'ok')
+    await this.eventBus.emit(new TodoCreatedEvent({ ...newTodo, createdAt: new Date() }))
+    // this.tracingService.spanEnd(span, 'ok')
     return newTodo
   }
 }
@@ -61,5 +61,5 @@ export class Dog implements Animal {
 export class AnimalService {
   @Autowired('Animal')
   public animal1!: Animal
-  constructor(@Autowired('Animal') public readonly animal: Animal) {}
+  constructor(@Autowired('Animal') public readonly animal: Animal) { }
 }

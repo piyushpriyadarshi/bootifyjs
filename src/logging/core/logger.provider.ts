@@ -1,8 +1,6 @@
 import pino from 'pino'
-import { LoggingConfigService } from '../config/logging.config'
-import { container, requestContextStore } from '../../core'
 import { AppConfig } from '../../config/AppConfig'
-import path from 'path'
+import { container, requestContextStore } from '../../core'
 
 // 1. Define a unique DI token for our logger instance
 export const LOGGER_TOKEN = Symbol.for('Logger')
@@ -62,18 +60,18 @@ export const loggerFactory = (): pino.Logger => {
     //     application: appConfig.get('SERVICE_NAME'),
     //   },
     // })
-    transportTargets.push({
-      level: 'info',
-      // target: './clickhouse-transport.js',
-      target: path.join(__dirname, 'clickhouse-transport.js'),
-      options: {
-        url: process.env.CLICKHOUSE_URL || 'http://localhost:8123',
-        username: process.env.CLICKHOUSE_USER || 'default',
-        password: process.env.CLICKHOUSE_PASSWORD || '',
-        database: process.env.CLICKHOUSE_DB || 'default',
-        application: process.env.APP_NAME || 'my-application',
-      },
-    })
+    // transportTargets.push({
+    //   level: 'info',
+    //   // target: './clickhouse-transport.js',
+    //   target: path.join(__dirname, 'clickhouse-transport.js'),
+    //   options: {
+    //     url: process.env.CLICKHOUSE_URL || 'http://localhost:8123',
+    //     username: process.env.CLICKHOUSE_USER || 'default',
+    //     password: process.env.CLICKHOUSE_PASSWORD || '',
+    //     database: process.env.CLICKHOUSE_DB || 'default',
+    //     application: process.env.APP_NAME || 'my-application',
+    //   },
+    // })
   }
   console.log('targets', transportTargets)
 

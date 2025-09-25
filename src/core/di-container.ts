@@ -159,7 +159,7 @@ import { METADATA_KEYS } from './decorators'
 // --- Type Definitions ---
 export type Constructor<T = any> = new (...args: any[]) => T
 export type DiToken = any
-export type BindingScope = 'Singleton' | 'Transient'
+export type BindingScope = 'singleton' | 'transient'
 
 export interface ComponentOptions {
   bindTo?: DiToken[]
@@ -197,7 +197,7 @@ export class Container {
     this.services.set(token, {
       useClass: options.useClass,
       useFactory: options.useFactory,
-      scope: options.scope || 'Singleton',
+      scope: options.scope || 'singleton',
     })
   }
 
@@ -211,7 +211,9 @@ export class Container {
       throw new Error(`[DI] Circular dependency detected for token '${String(token)}'.`)
     }
 
-    if (serviceDef.scope === 'Singleton' && serviceDef.instance) {
+
+
+    if (serviceDef.scope === 'singleton' && serviceDef.instance) {
       return serviceDef.instance
     }
 
@@ -234,8 +236,9 @@ export class Container {
         throw new Error(`[DI] No valid provider for token '${String(token)}'.`)
       }
 
-      if (serviceDef.scope === 'Singleton') {
+      if (serviceDef.scope === 'singleton') {
         serviceDef.instance = instance
+
       }
 
       return instance

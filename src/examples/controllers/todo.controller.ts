@@ -1,22 +1,21 @@
 import { z } from 'zod'
+import { AuthManager } from '../../auth'
+import { Cacheable } from '../../cache/decorators'
 import {
+  Autowired,
+  Body,
   Controller,
   Get,
-  Post,
-  Body,
-  Schema,
   Param,
-  UseMiddleware,
-  Autowired,
+  Post,
+  Schema
 } from '../../core/decorators'
-import { TodoService } from '../services/todo.service'
-import { authMiddleware } from '../../middleware/auth.middleware'
 import { container } from '../../core/di-container'
 import { RequestContextService } from '../../core/request-context.service'
-import { Cacheable } from '../../cache/decorators'
 import { Audit, Loggable } from '../../logging/core/decorators'
 import { Logger } from '../../logging/core/logger'
 import { TracingService } from '../../logging/core/tracing.service'
+import { TodoService } from '../services/todo.service'
 
 const createTodoSchema = {
   body: z
@@ -38,23 +37,28 @@ const getTodoByIdSchema = {
   }),
 }
 
+
+
 @Loggable()
 @Controller('/todos')
+// @UseMiddleware(authenticate(process.env.JWT_SECRET || 'your-secret-key'))
 export class TodoController {
-  constructor(private readonly todoService: TodoService) {}
+  constructor(private readonly todoService: TodoService) { }
 
   @Autowired(TracingService)
   private tracingService!: TracingService
 
+  @Autowired('AuthManager')
+  private authManager!: AuthManager
+
   private logger!: Logger
 
   @Get('/')
-  // @UseMiddleware(authMiddleware)
   getAllTodos() {
     const context = container.resolve<RequestContextService>(RequestContextService)
-    const span = this.tracingService.spanStart('get.all.todos', {
-      name: 'get all todos',
-    })
+    // const span = this.tracingService.spanStart('get.all.todos', {
+    //   name: 'get all todos',
+    // })
     console.log(context.store())
 
     const logger1 = container.resolve<Logger>(Logger)
@@ -62,7 +66,7 @@ export class TodoController {
     console.log(this.logger === logger1)
 
     this.logger.info('Hello from get all todo')
-    this.tracingService.spanEnd(span, 'ok')
+    // this.tracingService.spanEnd(span, 'ok')
     return this.todoService.getAllTodos()
   }
 
@@ -88,18 +92,19 @@ export class TodoController {
       }),
     },
   })
-  createTodo(@Body() body: z.infer<typeof todoSchema>) {
-    const span = this.tracingService.spanStart('create.todo.controller', {
-      name: 'create todo controller',
-      hello: 'world',
-      company: 'Jiocinema',
-    })
-    this.tracingService.addTags({
-      text: body.text,
-    })
+  // @UseMiddleware(authorize(['manager']))
+  async createTodo(@Body() body: z.infer<typeof todoSchema>) {
+    // const span = this.tracingService.spanStart('create.todo.controller', {
+    //   name: 'create todo controller',
+    //   hello: 'world',
+    //   company: 'Jiocinema',
+    // })
+    // this.tracingService.addTags({
+    //   text: body.text,
+    // })
     this.logger.info('Hello from create todo', body)
-    const data = this.todoService.createTodo(body.text)
-    this.tracingService.spanEnd(span, 'ok')
+    const data = await this.todoService.createTodo(body.text)
+    // this.tracingService.spanEnd(span, 'ok')
     return data
   }
 }

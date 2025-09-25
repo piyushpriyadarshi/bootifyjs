@@ -2,12 +2,14 @@ import { Component } from '../../core/decorators'
 import { EventListener, OnEvent } from '../../events/decorators'
 import { TodoCreatedEvent } from './todo.events'
 
-@Component()
+@Component({ eager: true })
 @EventListener()
-class TodoEventHandler {
+export class TodoEventHandler {
   @OnEvent('todo.created')
   handle(event: TodoCreatedEvent) {
-    console.log('TodoEventHandler', event)
-    console.log('TodoCreatedEvent', event)
+    console.log('🎯 TodoEventHandler.handle() called!')
+    console.log('📧 Event received:', event)
+    console.log('📧 Event type:', event?.type)
+    console.log('📧 Event payload:', event?.payload)
   }
 }

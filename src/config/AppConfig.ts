@@ -1,4 +1,4 @@
-import { z, ZodObject, ZodRawShape, AnyZodObject } from 'zod'
+import { AnyZodObject, z, ZodObject, ZodRawShape } from 'zod'
 
 // Framework-level configuration schema
 let FrameworkConfigSchema = z.object({
@@ -12,7 +12,14 @@ let FrameworkConfigSchema = z.object({
 const LoggingConfigSchema = z.object({
   LOG_LEVEL: z
     .enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal'])
-    .default(process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
+    .default('debug')
+    .transform((val, ctx) => {
+      // If no explicit LOG_LEVEL is set, use 'info' for production, 'debug' otherwise
+      if (val === 'debug' && !process.env.LOG_LEVEL && process.env.NODE_ENV === 'production') {
+        return 'info'
+      }
+      return val
+    }),
   SERVICE_NAME: z.string().default('bootifyjs-app'),
 
   // ClickHouse Configuration

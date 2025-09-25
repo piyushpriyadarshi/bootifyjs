@@ -1,17 +1,18 @@
-import fastify, { FastifyInstance } from 'fastify'
-import z, { ZodError, ZodObject, ZodSchema } from 'zod'
-import { registerControllers } from './core/router'
-import { Constructor } from './core/di-container'
 import fastifySwagger from '@fastify/swagger'
 import fastifySwaggerUI from '@fastify/swagger-ui'
+import fastify, { FastifyInstance } from 'fastify'
+import z, { ZodError, ZodObject } from 'zod'
+import { AppConfig } from './config/AppConfig'
+import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from './constants'
+import { FastifyMiddleware } from './core/decorators'
+import { Constructor } from './core/di-container'
+import { registerControllers } from './core/router'
+import { intitializeLogging } from './logging'
+import { ContextExtractor, createContextMiddleware } from './middleware/context.middleware'
 import {
   createRequestLoggerOnResponse,
-  requestLoggerOnRequest,
-  requestLoggerOnResponse,
+  requestLoggerOnRequest
 } from './middleware/request-logger.middleware'
-import { contextMiddleware } from './middleware/context.middleware'
-import { intitializeLogging } from './logging'
-import { AppConfig } from './config/AppConfig'
 
 export interface BootifyAppOptions {
   controllers: Constructor[]
@@ -19,6 +20,8 @@ export interface BootifyAppOptions {
   hostname?: string
   enableSwagger?: boolean
   configSchema?: ZodObject<any>
+  contextExtractor?: ContextExtractor
+  globalMiddlewares?: FastifyMiddleware[]
 }
 
 export async function createBootifyApp(options: BootifyAppOptions) {
@@ -31,10 +34,20 @@ export async function createBootifyApp(options: BootifyAppOptions) {
     logger: false,
   })
 
+  // Register context middleware FIRST to establish AsyncLocalStorage context
   startupLogger.logComponentStart('Request Context Middleware')
-
-  app.addHook('onRequest', contextMiddleware)
+  app.addHook('onRequest', createContextMiddleware(options.contextExtractor))
   startupLogger.logComponentComplete('Request Context Middleware')
+
+  // Register global middlewares after context is established
+  if (options.globalMiddlewares && options.globalMiddlewares.length > 0) {
+    startupLogger.logComponentStart('Global Middlewares')
+    options.globalMiddlewares.forEach((middleware, index) => {
+      app.addHook('onRequest', middleware)
+      console.log(`  ✓ Registered global middleware ${index + 1}`)
+    })
+    startupLogger.logComponentComplete('Global Middlewares')
+  }
 
   // 2. Request Logger Hooks
   // These log the start and end of the request.
@@ -65,6 +78,8 @@ export async function createBootifyApp(options: BootifyAppOptions) {
 
   if (options.enableSwagger) {
     startupLogger.logComponentStart('Initializing Swagger')
+    const swaggerHost = options.hostname ?? 'localhost'
+    const swaggerPort = options.port ?? DEFAULT_SERVER_PORT
     await app.register(fastifySwagger, {
       openapi: {
         info: {
@@ -72,7 +87,7 @@ export async function createBootifyApp(options: BootifyAppOptions) {
           description: 'API documentation',
           version: '1.0.0',
         },
-        servers: [{ url: `http://${options.hostname ?? 'localhost'}:${options.port ?? 3000}` }],
+        servers: [{ url: `http://${swaggerHost}:${swaggerPort}` }],
       },
     })
 
@@ -89,8 +104,10 @@ export async function createBootifyApp(options: BootifyAppOptions) {
   startupLogger.logStartupComplete()
   const start = async () => {
     try {
-      await app.listen({ port: options.port ?? 3000, host: options.hostname ?? '0.0.0.0' })
-      startupLogger.logStartupSummary()
+      const actualPort = options.port ?? DEFAULT_SERVER_PORT
+      const actualHost = options.hostname ?? DEFAULT_SERVER_HOST
+      await app.listen({ port: actualPort, host: actualHost })
+      startupLogger.logStartupSummary(actualPort, actualHost)
     } catch (err) {
       app.log.error(err)
       process.exit(1)

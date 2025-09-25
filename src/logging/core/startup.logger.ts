@@ -1,5 +1,6 @@
 import { Autowired, Service } from '../../core'
 import { Logger } from './logger'
+import { DEFAULT_SERVER_PORT } from '../../constants'
 import * as os from 'os'
 
 interface StartupLogPayload {
@@ -81,8 +82,10 @@ export class StartupLoggerService {
     // }
   }
 
-  logStartupSummary(): void {
+  logStartupSummary(port?: number, host?: string): void {
     const totalDuration = Date.now() - this.startupStartTime
+    const actualPort = port || process.env.PORT || DEFAULT_SERVER_PORT
+    const actualHost = host || 'localhost'
     const summary = [
       '',
       '🚀 BootifyJS Application Started Successfully',
@@ -91,8 +94,8 @@ export class StartupLoggerService {
       `🔧 Environment: ${process.env.NODE_ENV || 'development'}`,
       `📦 Node.js: ${process.version}`,
       `💾 Memory usage: ${this.formatMemory(process.memoryUsage().heapUsed)}`,
-      `🌐 Server: http://localhost:${process.env.PORT || 3000}`,
-      `📚 API Docs: http://localhost:${process.env.PORT || 3000}/api-docs`,
+      `🌐 Server: http://${actualHost}:${actualPort}`,
+      `📚 API Docs: http://${actualHost}:${actualPort}/api-docs`,
       '─'.repeat(50),
       '',
     ].join('\n')

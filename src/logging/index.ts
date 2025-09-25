@@ -1,14 +1,15 @@
 import { container } from '../core'
-import { LOGGER_TOKEN, loggerFactory } from './core/logger.provider'
 import { Logger } from './core/logger'
+import { LOGGER_TOKEN, loggerFactory } from './core/logger.provider'
 import { StartupLoggerService } from './core/startup.logger'
-import pino from 'pino'
 
 export async function intitializeLogging(): Promise<{
   logger: Logger
   startupLogger: StartupLoggerService
 }> {
   console.log('🔄 Bootstrapping Logging System...')
+
+  console.log('NODE_ENV', process.env.NODE_ENV)
 
   // First, ensure the config service itself is registered as a component.
   // Our @Service decorator already handles this.
@@ -24,6 +25,6 @@ export async function intitializeLogging(): Promise<{
 }
 
 // export const logger = container.resolve<pino.Logger>(LOGGER_TOKEN)
-export * from './core/logger'
 export * from './core/decorators'
+export * from './core/logger'
 

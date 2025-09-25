@@ -32,6 +32,13 @@ class EnhancedTracingDashboard {
             btn.addEventListener('click', (e) => {
                 const tab = e.currentTarget.dataset.tab
                 this.showTab(tab)
+                
+                // Initialize tab-specific functionality
+                if (tab === 'service-stats') {
+                    setTimeout(() => initServiceStats(), 100);
+                } else if (tab === 'service-map') {
+                    setTimeout(() => initServiceMap(), 100);
+                }
             })
         })
 
@@ -422,6 +429,202 @@ class EnhancedTracingDashboard {
         if (text.length <= maxLength) return text
         return text.substring(0, maxLength) + '...'
     }
+}
+
+// Service Statistics functionality
+let performanceChart = null;
+let errorChart = null;
+
+function initServiceStats() {
+    loadServiceStats();
+    setupStatsEventListeners();
+    initializeCharts();
+}
+
+function setupStatsEventListeners() {
+    const refreshBtn = document.getElementById('refresh-stats');
+    const timeRangeSelect = document.getElementById('stats-time-range');
+
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', loadServiceStats);
+    }
+
+    if (timeRangeSelect) {
+        timeRangeSelect.addEventListener('change', loadServiceStats);
+    }
+}
+
+async function loadServiceStats() {
+    try {
+        const timeRange = document.getElementById('stats-time-range')?.value || '24h';
+        
+        // Load overview stats
+        const statsResponse = await fetch(`/api/service-stats?timeRange=${timeRange}`);
+        const statsData = await statsResponse.json();
+        updateOverviewCards(statsData);
+
+        // Load service health data
+        const healthResponse = await fetch(`/api/service-health?timeRange=${timeRange}`);
+        const healthData = await healthResponse.json();
+        updateServiceHealthTable(healthData.services || []);
+
+        // Load performance metrics for charts
+        const metricsResponse = await fetch(`/api/performance-metrics?timeRange=${timeRange}&interval=1h`);
+        const metricsData = await metricsResponse.json();
+        updateCharts(metricsData);
+
+    } catch (error) {
+        console.error('Error loading service stats:', error);
+        showNotification('Error loading service statistics', 'error');
+    }
+}
+
+function updateOverviewCards(data) {
+    const overview = data.overview || {};
+    
+    document.getElementById('total-services').textContent = overview.totalServices || '0';
+    document.getElementById('error-rate').textContent = `${(overview.errorRate || 0).toFixed(2)}%`;
+    document.getElementById('avg-response-time').textContent = `${(overview.avgResponseTime || 0).toFixed(0)}ms`;
+    document.getElementById('total-requests').textContent = (overview.totalRequests || 0).toLocaleString();
+}
+
+function updateServiceHealthTable(services) {
+    const tbody = document.querySelector('#service-health-table tbody');
+    if (!tbody) return;
+
+    tbody.innerHTML = services.map(service => {
+        const statusClass = getStatusClass(service.status);
+        const uptime = ((service.uptime || 0) * 100).toFixed(2);
+        const errorRate = ((service.errorRate || 0) * 100).toFixed(2);
+        const avgResponseTime = (service.avgResponseTime || 0).toFixed(0);
+        const totalRequests = (service.totalRequests || 0).toLocaleString();
+        const lastSeen = new Date(service.lastSeen).toLocaleString();
+
+        return `
+            <tr>
+                <td><strong>${service.service}</strong></td>
+                <td><span class="status-badge ${statusClass}">${service.status}</span></td>
+                <td>${uptime}%</td>
+                <td>${errorRate}%</td>
+                <td>${avgResponseTime}ms</td>
+                <td>${totalRequests}</td>
+                <td>${lastSeen}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function getStatusClass(status) {
+    switch (status?.toLowerCase()) {
+        case 'healthy': return 'status-healthy';
+        case 'warning': return 'status-warning';
+        case 'critical': return 'status-critical';
+        default: return 'status-warning';
+    }
+}
+
+function initializeCharts() {
+    const performanceCtx = document.getElementById('performance-chart');
+    const errorCtx = document.getElementById('error-chart');
+
+    if (performanceCtx) {
+        performanceChart = new Chart(performanceCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Avg Response Time (ms)',
+                    data: [],
+                    borderColor: '#3498db',
+                    backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                    tension: 0.4
+                }, {
+                    label: 'Request Count',
+                    data: [],
+                    borderColor: '#27ae60',
+                    backgroundColor: 'rgba(39, 174, 96, 0.1)',
+                    yAxisID: 'y1',
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: {
+                            display: true,
+                            text: 'Response Time (ms)'
+                        }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: {
+                            display: true,
+                            text: 'Request Count'
+                        },
+                        grid: {
+                            drawOnChartArea: false,
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    if (errorCtx) {
+        errorChart = new Chart(errorCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Success', 'Client Error', 'Server Error'],
+                datasets: [{
+                    data: [0, 0, 0],
+                    backgroundColor: ['#27ae60', '#f39c12', '#e74c3c']
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+    }
+}
+
+function updateCharts(data) {
+    if (performanceChart && data.timeline) {
+        const labels = data.timeline.map(item => new Date(item.timestamp).toLocaleTimeString());
+        const responseTimes = data.timeline.map(item => item.avgResponseTime || 0);
+        const requestCounts = data.timeline.map(item => item.requestCount || 0);
+
+        performanceChart.data.labels = labels;
+        performanceChart.data.datasets[0].data = responseTimes;
+        performanceChart.data.datasets[1].data = requestCounts;
+        performanceChart.update();
+    }
+
+    if (errorChart && data.statusDistribution) {
+        const dist = data.statusDistribution;
+        errorChart.data.datasets[0].data = [
+            dist.success || 0,
+            dist.clientError || 0,
+            dist.serverError || 0
+        ];
+        errorChart.update();
+    }
+}
+
+// Service Map functionality
+function initServiceMap() {
+    // Service map implementation would go here
+    console.log('Service map initialized');
 }
 
 // Initialize enhanced dashboard

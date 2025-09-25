@@ -37,6 +37,9 @@
             <button class="tab-btn" data-tab="metrics">
                 <i class="fas fa-chart-bar"></i> Metrics
             </button>
+            <button class="tab-btn" data-tab="service-stats">
+                <i class="fas fa-chart-line"></i> Service Statistics
+            </button>
             <button class="tab-btn" data-tab="service-map">
                 <i class="fas fa-sitemap"></i> Service Map
             </button>
@@ -146,11 +149,107 @@
             <!-- Metrics content -->
         </div>
         
+        <div id="service-stats" class="tab-content">
+            <div class="stats-header">
+                <h2>Service Statistics Overview</h2>
+                <div class="stats-controls">
+                    <select id="stats-time-range">
+                        <option value="1h">Last Hour</option>
+                        <option value="6h">Last 6 Hours</option>
+                        <option value="24h" selected>Last 24 Hours</option>
+                        <option value="7d">Last 7 Days</option>
+                    </select>
+                    <button id="refresh-stats" class="btn btn-primary">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+            </div>
+
+            <!-- Overview Cards -->
+            <div class="stats-overview">
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-server"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 id="total-services">-</h3>
+                        <p>Total Services</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon error">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 id="error-rate">-</h3>
+                        <p>Error Rate</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon success">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 id="avg-response-time">-</h3>
+                        <p>Avg Response Time</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon info">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 id="total-requests">-</h3>
+                        <p>Total Requests</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="stats-charts">
+                <div class="chart-container">
+                    <h3>Service Performance Trends</h3>
+                    <canvas id="performance-chart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <h3>Error Rate Distribution</h3>
+                    <canvas id="error-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Service Health Table -->
+            <div class="stats-table-container">
+                <h3>Service Health Details</h3>
+                <div class="table-wrapper">
+                    <table id="service-health-table" class="stats-table">
+                        <thead>
+                            <tr>
+                                <th>Service</th>
+                                <th>Status</th>
+                                <th>Uptime</th>
+                                <th>Error Rate</th>
+                                <th>Avg Response Time</th>
+                                <th>Total Requests</th>
+                                <th>Last Seen</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Dynamic content -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
         <div id="service-map" class="tab-content">
-            <!-- Service map content -->
+            <div class="service-map-container">
+                <div id="service-map-viz"></div>
+            </div>
         </div>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <script src="/enhanced-dashboard.js"></script>
 </body>
 </html>

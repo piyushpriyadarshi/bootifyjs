@@ -65,6 +65,8 @@ export class EventBusService {
     event.correlationId = contextService.get<string>('requestId')
 
     console.log(`[EventBus] Emitting event '${event.type}'`, { correlationId: event.correlationId })
+    console.log(`[EventBus] Event listeners count for '${event.type}':`, this.emitter.listenerCount(event.type))
+    console.log(`[EventBus] All registered events:`, this.emitter.eventNames())
     this.emitter.emit(event.type, event)
   }
 
