@@ -10,25 +10,25 @@ export * from './types';
 export { AuthManager } from './AuthManager';
 
 // Authentication strategies
-export { JwtStrategy } from './strategies/JwtStrategy';
 export { ApiKeyStrategy } from './strategies/ApiKeyStrategy';
+export { JwtStrategy } from './strategies/JwtStrategy';
 
 // Token storage implementations
 export { RedisTokenStorage } from './storage/RedisTokenStorage';
 
 // Middleware
-export { AuthMiddleware } from './middleware/AuthMiddleware';
+// export { AuthMiddleware } from './middleware/AuthMiddleware'; // Currently commented out
 
 // Re-export strategy configs for convenience
-export type { JwtStrategyConfig } from './strategies/JwtStrategy';
-export type { ApiKeyStrategyConfig } from './strategies/ApiKeyStrategy';
 export type { RedisTokenStorageConfig } from './storage/RedisTokenStorage';
+export type { ApiKeyStrategyConfig } from './strategies/ApiKeyStrategy';
+export type { JwtStrategyConfig } from './strategies/JwtStrategy';
 
 // Import classes for internal use
 import { AuthManager } from './AuthManager';
-import { JwtStrategy } from './strategies/JwtStrategy';
 import { ApiKeyStrategy } from './strategies/ApiKeyStrategy';
-import { AuthMiddleware } from './middleware/AuthMiddleware';
+import { JwtStrategy } from './strategies/JwtStrategy';
+// import { AuthMiddleware } from './middleware/AuthMiddleware'; // Currently commented out
 
 /**
  * Quick setup helper for common authentication scenarios
@@ -80,7 +80,8 @@ export class AuthSetup {
 
     return {
       authManager,
-      middleware: new AuthMiddleware(authManager)
+      // middleware: new AuthMiddleware(authManager) // Currently commented out
+      middleware: null
     };
   }
 
@@ -112,7 +113,8 @@ export class AuthSetup {
 
     return {
       authManager,
-      middleware: new AuthMiddleware(authManager)
+      // middleware: new AuthMiddleware(authManager) // Currently commented out
+      middleware: null
     };
   }
 
@@ -139,7 +141,8 @@ export class AuthSetup {
 
     return {
       authManager,
-      middleware: new AuthMiddleware(authManager)
+      // middleware: new AuthMiddleware(authManager) // Currently commented out
+      middleware: null
     };
   }
 }

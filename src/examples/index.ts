@@ -10,6 +10,9 @@ dotenv.config()
 // import { bootstrapCache } from '../cache/bootstrap'
 import z from 'zod'
 import { registerJWTAuthRoutes, setupJwtAuth } from '../auth/examples/basic-usage'
+import { bootstrapCache } from '../cache'
+// Import the RedisCacheStore to trigger @Service decorator registration
+import '../cache/stores/redis-cache.store'
 
 // --- Application Startup ---
 
@@ -63,8 +66,8 @@ async function main() {
   container.register('AuthManager', { useFactory: () => authManager })
 
   const allComponents = Array.from(container.getRegisteredComponents())
-  await bootstrapEventSystem(allComponents)
-  // await bootstrapCache()
+  await bootstrapEventSystem(allComponents, { useBufferedProcessing: true })
+  await bootstrapCache()
 
   const { app, start } = await createBootifyApp({
     controllers: [HealthController, TodoController],
@@ -72,10 +75,10 @@ async function main() {
     port: 8080,
     configSchema: envSchema,
     globalMiddlewares: [
-      jwtAuthMiddleware.authenticate({
-        strategies: ['jwt', 'api-key'],
-        skipPaths: ['/auth/login', '/auth/refresh', '/health']
-      }),
+      // jwtAuthMiddleware.authenticate({
+      //   strategies: ['jwt', 'api-key'],
+      //   skipPaths: ['/auth/login', '/auth/refresh', '/health']
+      // }),
       corsMiddleware,              // 1st: Handle CORS headers
       securityHeadersMiddleware,   // 2nd: Add security headers
       requestTimingMiddleware,     // 3rd: Start request timing

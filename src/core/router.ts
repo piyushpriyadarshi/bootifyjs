@@ -54,14 +54,15 @@ export function registerControllers(fastify: FastifyInstance, controllers: Const
       )
 
       // console.log(validationSchemas)
+      const url = `${prefix}${route.path}`.replace(/\/+/g, '/')
+      
       const routeOptions: RouteOptions = {
         method: route.method,
-        url: `${prefix}${route.path}`.replace(/\/+/g, '/'),
+        url,
         schema: validationSchemas ? buildFastifySchema(validationSchemas) : {},
         // 👇 Attach all middleware functions to the preHandler hook
         preHandler: allMiddlewares,
         handler: async (request: FastifyRequest, reply: FastifyReply) => {
-          // ... handler logic remains the same
           try {
             const args = paramDecorators.map((param: any) => {
               if (!param) return undefined
@@ -94,7 +95,7 @@ export function registerControllers(fastify: FastifyInstance, controllers: Const
 
       fastify.route(routeOptions)
       console.log(
-        `  ✓  Registered: ${route.method.padEnd(7)} ${routeOptions.url} (middlewares: ${
+        `  ✓  Registered: ${route.method.padEnd(7)} ${url} (middlewares: ${
           allMiddlewares.length
         })`
       )

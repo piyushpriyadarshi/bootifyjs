@@ -69,7 +69,7 @@ export class AuthMiddleware {
           req.isAuthenticated = true;
 
           // Add context to request - use existing context from context middleware
-          const contextService = new RequestContextService()
+          const contextService = new RequestContextService();
           contextService.set('user', { id: authResult.user.id, username: authResult.user.username })
 
           // Check role-based authorization if specified

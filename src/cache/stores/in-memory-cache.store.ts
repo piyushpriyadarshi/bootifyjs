@@ -1,5 +1,5 @@
-import { Service } from '../core/decorators'
-import { ICacheStore } from './cache.types'
+import { Service } from '../../core/decorators'
+import { ICacheStore } from '../cache.types'
 
 // A simple in-memory cache store using a Map.
 @Service()

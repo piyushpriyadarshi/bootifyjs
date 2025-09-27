@@ -1,152 +1,149 @@
 # Cache Module
 
-The Cache module provides a flexible caching system for the Bootify framework, allowing you to improve performance by storing frequently accessed data.
+A comprehensive caching system for the BootifyJS framework with support for multiple cache store implementations, decorators for method-level caching, and dependency injection integration.
 
 ## Features
 
-- **Pluggable Cache Stores**: Support for different cache backends
-- **Method-level Caching**: Declarative caching with decorators
-- **TTL Support**: Automatic expiration of cached items
-- **In-Memory Default**: Built-in in-memory cache store
+- **Multiple Cache Stores**: In-memory and Redis implementations
+- **Method-level Caching**: `@Cacheable` and `@CacheEvict` decorators
+- **Dependency Injection**: Seamless integration with the DI container
+- **TTL Support**: Time-to-live configuration for cache entries
+- **Automatic Bootstrapping**: Smart detection of custom cache stores
 
-## Usage
+## Quick Start
 
-### Basic Caching
+### Basic Usage
 
 ```typescript
-import { CacheService } from 'bootify/cache';
-import { Service, Autowired } from 'bootify/core';
+import { CacheService } from '@bootifyjs/cache'
 
 @Service()
-export class UserService {
-  constructor(@Autowired() private cacheService: CacheService) {}
-  
-  async getUserById(id: string) {
-    // Try to get from cache first
-    const cacheKey = `user:${id}`;
-    const cachedUser = await this.cacheService.get<User>(cacheKey);
-    
-    if (cachedUser) {
-      return cachedUser;
-    }
-    
-    // If not in cache, fetch from database
-    const user = await this.fetchUserFromDatabase(id);
-    
-    // Store in cache for 5 minutes (300 seconds)
-    await this.cacheService.set(cacheKey, user, 300);
-    
-    return user;
-  }
-  
-  private async fetchUserFromDatabase(id: string) {
-    // Database fetch logic
-    return { id, name: 'John Doe' };
+class UserService {
+  constructor(private cacheService: CacheService) {}
+
+  async getUser(id: string) {
+    // Manual caching
+    const cached = await this.cacheService.get(`user:${id}`)
+    if (cached) return cached
+
+    const user = await this.fetchUserFromDB(id)
+    await this.cacheService.set(`user:${id}`, user, 300) // 5 minutes TTL
+    return user
   }
 }
 ```
 
-### Method Caching with Decorator
+### Using Decorators
 
 ```typescript
-import { Cached } from 'bootify/cache';
-import { Service } from 'bootify/core';
+import { Cacheable, CacheEvict } from '@bootifyjs/cache'
 
 @Service()
-export class ProductService {
-  @Cached('products', 600) // Cache key prefix and TTL in seconds
-  async getAllProducts() {
-    console.log('Fetching products from database...');
-    // This will only execute when cache is empty
-    return [
-      { id: 1, name: 'Product 1' },
-      { id: 2, name: 'Product 2' }
-    ];
+class UserService {
+  @Cacheable({ key: 'user', ttl: 300 })
+  async getUser(id: string) {
+    return await this.fetchUserFromDB(id)
   }
-  
-  @Cached('product:{0}', 300) // {0} refers to the first parameter
-  async getProductById(id: number) {
-    console.log(`Fetching product ${id} from database...`);
-    return { id, name: `Product ${id}` };
+
+  @CacheEvict({ key: 'user' })
+  async updateUser(id: string, data: any) {
+    return await this.updateUserInDB(id, data)
   }
 }
 ```
 
-### Cache Invalidation
+## Cache Store Implementations
+
+### In-Memory Cache Store
+
+The default cache store that uses a JavaScript Map for storage.
 
 ```typescript
-import { CacheService } from 'bootify/cache';
-import { Service, Autowired } from 'bootify/core';
+import { InMemoryCacheStore } from '@bootifyjs/cache'
 
-@Service()
-export class ProductManager {
-  constructor(
-    @Autowired() private cacheService: CacheService,
-    @Autowired() private productService: ProductService
-  ) {}
-  
-  async updateProduct(id: number, data: any) {
-    // Update product in database
-    // ...
-    
-    // Invalidate specific product cache
-    await this.cacheService.del(`product:${id}`);
-    
-    // Invalidate all products list cache
-    await this.cacheService.del('products');
-    
-    return { id, ...data };
-  }
-}
+// Automatically used if no custom store is provided
 ```
 
-### Custom Cache Store
+### Redis Cache Store
+
+A Redis-based cache store implementation (currently using Map as placeholder).
 
 ```typescript
-import { ICacheStore, CACHE_STORE_TOKEN } from 'bootify/cache';
-import { Service } from 'bootify/core';
-import Redis from 'ioredis';
+import { RedisCacheStore } from '@bootifyjs/cache'
+
+// Import to register with DI container
+import '@bootifyjs/cache/stores/redis-cache.store'
+```
+
+## Custom Cache Store
+
+Implement the `ICacheStore` interface to create custom cache stores:
+
+```typescript
+import { ICacheStore, CACHE_STORE_TOKEN, Service } from '@bootifyjs/cache'
 
 @Service({ bindTo: [CACHE_STORE_TOKEN] })
-export class RedisCacheStore implements ICacheStore {
-  private client: Redis;
-  
-  constructor() {
-    this.client = new Redis({
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379')
-    });
-  }
-  
+export class CustomCacheStore implements ICacheStore {
   async get<T>(key: string): Promise<T | undefined> {
-    const value = await this.client.get(key);
-    if (!value) return undefined;
-    return JSON.parse(value) as T;
+    // Your implementation
   }
-  
+
   async set(key: string, value: any, ttlInSeconds?: number): Promise<void> {
-    const serialized = JSON.stringify(value);
-    if (ttlInSeconds) {
-      await this.client.setex(key, ttlInSeconds, serialized);
-    } else {
-      await this.client.set(key, serialized);
-    }
+    // Your implementation
   }
-  
+
   async del(key: string): Promise<void> {
-    await this.client.del(key);
+    // Your implementation
   }
 }
 ```
+
+## Module Structure
+
+```
+src/cache/
+├── index.ts                 # Main module exports
+├── bootstrap.ts             # Cache system initialization
+├── cache.service.ts         # Main cache service
+├── cache.types.ts           # Interfaces and tokens
+├── decorators.ts            # @Cacheable and @CacheEvict decorators
+├── stores/                  # Cache store implementations
+│   ├── index.ts            # Store exports
+│   ├── in-memory-cache.store.ts
+│   └── redis-cache.store.ts
+└── README.md               # This file
+```
+
+## Configuration
+
+The cache system automatically bootstraps during application startup:
+
+1. Checks for custom cache store registrations
+2. Falls back to `InMemoryCacheStore` if none found
+3. Registers the `CacheService` for dependency injection
+
+## Best Practices
+
+1. **Use appropriate TTL values** to prevent stale data
+2. **Cache expensive operations** like database queries or API calls
+3. **Use cache eviction** when data is updated
+4. **Consider memory usage** when using in-memory caching
+5. **Import cache stores** to ensure proper registration
 
 ## API Reference
 
 ### CacheService
 
-- `get<T>(key: string): Promise<T | undefined>`: Retrieve a cached item
-- `set(key: string, value: any, ttlInSeconds?: number): Promise<void>`: Store an item in cache
-- `del(key: string): Promise<void>`: Remove an item from cache
+- `get<T>(key: string): Promise<T | undefined>` - Retrieve cached value
+- `set(key: string, value: any, ttlInSeconds?: number): Promise<void>` - Store value
+- `del(key: string): Promise<void>` - Delete cached value
 
 ### Decorators
 
-- `@Cached(keyPattern, ttlInSeconds?)`: Cache the result of a method
+- `@Cacheable(options)` - Cache method results
+- `@CacheEvict(options)` - Evict cache entries
+
+### Interfaces
+
+- `ICacheStore` - Contract for cache store implementations
+- `CACHE_STORE_TOKEN` - DI token for cache stores

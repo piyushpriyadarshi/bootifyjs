@@ -6,15 +6,15 @@
 import { FastifyInstance } from 'fastify';
 import { container } from '../../core';
 import { Logger } from '../../logging';
-import { LOGGER_TOKEN } from '../../logging/core/logger.provider';
 import {
   ApiKeyStrategy,
   AuthContext,
   AuthManager,
-  AuthMiddleware,
   JwtStrategy,
   RedisTokenStorage
 } from '../index';
+import { AuthMiddleware } from '../middleware/AuthMiddleware';
+
 
 // Mock Redis client for example purposes
 export class MockRedisClient {

@@ -1,6 +1,6 @@
 import { container } from '../core/di-container'
 import { CACHE_STORE_TOKEN } from './cache.types'
-import { InMemoryCacheStore } from './in-memory-cache.store'
+import { InMemoryCacheStore } from './stores/in-memory-cache.store'
 
 /**
  * Checks if a user has provided a custom cache store. If not, it registers

@@ -1,4 +1,7 @@
 export * from './bootstrap'
 export * from './event-bus.service'
+export * from './buffered-event-bus.service'
 export * from './event.types'
 export * from './decorators'
+export * from './shared-buffer'
+export * from './config/buffered-event-config'

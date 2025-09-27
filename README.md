@@ -8,7 +8,7 @@ Our goal is to make building complex, scalable, and maintainable backend applica
 
 - **Declarative & Decorator-Driven:** Write clean, readable, and self-documenting code using a rich set of decorators for controllers, services, dependency injection, and more.
 - **Powerful Dependency Injection:** A full-featured DI container that supports constructor and property injection, interface binding, scopes, and eager loading.
-- **Event-Driven Architecture:** A built-in, asynchronous event bus with automatic retries and a dead-letter queue, enabling you to build resilient, decoupled systems.
+- **Event-Driven Architecture:** A built-in, asynchronous event bus with automatic retries and a dead-letter queue, plus high-performance buffered event processing with worker threads, priority queues, and advanced monitoring.
 - **Pluggable Caching:** A decorator-driven caching system that works out-of-the-box with an in-memory store and can be seamlessly extended to use Redis or other backends.
 - **Type-Safe Configuration:** A schema-driven configuration system that validates your environment at startup, catching errors early and providing fully typed config objects.
 - **Built on Fastify:** Leverage the incredible performance and rich plugin ecosystem of one of the fastest web frameworks for Node.js.

@@ -22,6 +22,7 @@ export interface BootifyAppOptions {
   configSchema?: ZodObject<any>
   contextExtractor?: ContextExtractor
   globalMiddlewares?: FastifyMiddleware[]
+  ignoreTrailingSlash?: boolean
 }
 
 export async function createBootifyApp(options: BootifyAppOptions) {
@@ -32,6 +33,7 @@ export async function createBootifyApp(options: BootifyAppOptions) {
   startupLogger.logStartupBanner()
   const app: FastifyInstance = fastify({
     logger: false,
+    ignoreTrailingSlash: options.ignoreTrailingSlash ?? true,
   })
 
   // Register context middleware FIRST to establish AsyncLocalStorage context
