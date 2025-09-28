@@ -83,7 +83,8 @@ async function main() {
       securityHeadersMiddleware,   // 2nd: Add security headers
       requestTimingMiddleware,     // 3rd: Start request timing
       requestLoggingMiddleware     // 4th: Log request details
-    ]
+    ],
+    enableCookie: true
   })
 
   await registerJWTAuthRoutes(app, authManager, jwtAuthMiddleware)

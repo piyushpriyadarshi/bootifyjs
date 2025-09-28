@@ -1,5 +1,3 @@
-import fastifySwagger from '@fastify/swagger'
-import fastifySwaggerUI from '@fastify/swagger-ui'
 import fastify, { FastifyInstance } from 'fastify'
 import z, { ZodError, ZodObject } from 'zod'
 import { AppConfig } from './config/AppConfig'
@@ -23,6 +21,7 @@ export interface BootifyAppOptions {
   contextExtractor?: ContextExtractor
   globalMiddlewares?: FastifyMiddleware[]
   ignoreTrailingSlash?: boolean
+  enableCookie?: boolean
 }
 
 export async function createBootifyApp(options: BootifyAppOptions) {
@@ -78,11 +77,28 @@ export async function createBootifyApp(options: BootifyAppOptions) {
   })
   startupLogger.logComponentComplete('Attaching Global ErrorHandler')
 
+  // Register cookie parsing if enabled
+  if (options.enableCookie) {
+    startupLogger.logComponentStart('Registering Cookie Parser')
+    try {
+      const fastifyCookie = await import('@fastify/cookie' as string)
+      await app.register(fastifyCookie.default, {
+        hook: "onRequest", // set to false to disable cookie autoparsing or set
+        parseOptions: {}, // options for parsing cookies
+      })
+      startupLogger.logComponentComplete('Cookie Parser')
+    } catch (error) {
+      throw new Error('Cookie parsing is enabled but @fastify/cookie is not installed. Please install it with: npm install @fastify/cookie')
+    }
+  }
+
   if (options.enableSwagger) {
     startupLogger.logComponentStart('Initializing Swagger')
     const swaggerHost = options.hostname ?? 'localhost'
     const swaggerPort = options.port ?? DEFAULT_SERVER_PORT
-    await app.register(fastifySwagger, {
+    const fastifySwagger = await import('@fastify/swagger')
+    const fastifySwaggerUI = await import('@fastify/swagger-ui')
+    await app.register(fastifySwagger.default, {
       openapi: {
         info: {
           title: 'Bootify (Fastify) API',
@@ -93,7 +109,7 @@ export async function createBootifyApp(options: BootifyAppOptions) {
       },
     })
 
-    await app.register(fastifySwaggerUI, {
+    await app.register(fastifySwaggerUI.default, {
       routePrefix: '/api-docs',
     })
     startupLogger.logComponentComplete(' Swagger COnfiguiration Done')
