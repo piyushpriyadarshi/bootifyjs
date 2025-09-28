@@ -40,6 +40,22 @@ export async function createBootifyApp(options: BootifyAppOptions) {
   app.addHook('onRequest', createContextMiddleware(options.contextExtractor))
   startupLogger.logComponentComplete('Request Context Middleware')
 
+  // Register cookie parsing if enabled
+
+  if (options.enableCookie) {
+    startupLogger.logComponentStart('Registering Cookie Parser')
+    try {
+      const fastifyCookie = await import('@fastify/cookie' as string)
+      await app.register(fastifyCookie.default, {
+        hook: "onRequest", // set to false to disable cookie autoparsing or set
+        parseOptions: {}, // options for parsing cookies
+      })
+      startupLogger.logComponentComplete('Cookie Parser')
+    } catch (error) {
+      throw new Error('Cookie parsing is enabled but @fastify/cookie is not installed. Please install it with: npm install @fastify/cookie')
+    }
+  }
+
   // Register global middlewares after context is established
   if (options.globalMiddlewares && options.globalMiddlewares.length > 0) {
     startupLogger.logComponentStart('Global Middlewares')
@@ -77,20 +93,8 @@ export async function createBootifyApp(options: BootifyAppOptions) {
   })
   startupLogger.logComponentComplete('Attaching Global ErrorHandler')
 
-  // Register cookie parsing if enabled
-  if (options.enableCookie) {
-    startupLogger.logComponentStart('Registering Cookie Parser')
-    try {
-      const fastifyCookie = await import('@fastify/cookie' as string)
-      await app.register(fastifyCookie.default, {
-        hook: "onRequest", // set to false to disable cookie autoparsing or set
-        parseOptions: {}, // options for parsing cookies
-      })
-      startupLogger.logComponentComplete('Cookie Parser')
-    } catch (error) {
-      throw new Error('Cookie parsing is enabled but @fastify/cookie is not installed. Please install it with: npm install @fastify/cookie')
-    }
-  }
+
+
 
   if (options.enableSwagger) {
     startupLogger.logComponentStart('Initializing Swagger')
