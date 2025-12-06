@@ -1,0 +1,26 @@
+<svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <!-- Caching icon -->
+  <circle cx="60" cy="60" r="55" fill="#fef3c7" stroke="#f59e0b" stroke-width="2"/>
+  
+  <!-- Database/storage cylinders -->
+  <ellipse cx="45" cy="45" rx="18" ry="8" fill="#fbbf24" stroke="#d97706" stroke-width="2"/>
+  <rect x="27" y="45" width="36" height="25" fill="#fbbf24" stroke="#d97706" stroke-width="2"/>
+  <ellipse cx="45" cy="70" rx="18" ry="8" fill="#fcd34d" stroke="#d97706" stroke-width="2"/>
+  
+  <!-- Cache layer (faster) -->
+  <ellipse cx="75" cy="50" rx="18" ry="8" fill="#4ade80" stroke="#16a34a" stroke-width="2"/>
+  <rect x="57" y="50" width="36" height="25" fill="#4ade80" stroke="#16a34a" stroke-width="2"/>
+  <ellipse cx="75" cy="75" rx="18" ry="8" fill="#86efac" stroke="#16a34a" stroke-width="2"/>
+  
+  <!-- Lightning for speed -->
+  <path d="M 75 30 L 72 40 L 77 40 L 74 50 L 80 40 L 75 40 Z" fill="#fbbf24" stroke="#f59e0b" stroke-width="1"/>
+  
+  <!-- Arrow showing cache hit -->
+  <path d="M 50 55 L 65 58" stroke="#16a34a" stroke-width="2" marker-end="url(#arroworange)"/>
+  
+  <defs>
+    <marker id="arroworange" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#16a34a" />
+    </marker>
+  </defs>
+</svg>

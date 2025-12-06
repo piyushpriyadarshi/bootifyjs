@@ -1,0 +1,180 @@
+/* Comparison Table Container */
+.comparisonContainer {
+  margin: 2rem 0;
+  overflow-x: auto;
+  border-radius: 0.75rem;
+  border: 1px solid var(--ifm-color-emphasis-200);
+}
+
+/* Table */
+.comparisonTable {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+/* Table Header */
+.comparisonTable thead {
+  background: linear-gradient(135deg, var(--ifm-color-primary), var(--ifm-color-primary-dark));
+}
+
+.comparisonTable th {
+  padding: 1rem 1.25rem;
+  text-align: left;
+  font-weight: 600;
+  color: white;
+  border: none;
+  white-space: nowrap;
+}
+
+.comparisonTable th:first-child {
+  border-top-left-radius: 0.75rem;
+}
+
+.comparisonTable th:last-child {
+  border-top-right-radius: 0.75rem;
+}
+
+/* Feature column header */
+.featureHeader {
+  min-width: 200px;
+}
+
+/* Framework column headers */
+.frameworkHeader {
+  text-align: center !important;
+  min-width: 120px;
+}
+
+/* Table Body */
+.comparisonTable tbody tr {
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+  transition: background-color 0.2s ease;
+}
+
+.comparisonTable tbody tr:last-child {
+  border-bottom: none;
+}
+
+.comparisonTable tbody tr:hover {
+  background-color: var(--ifm-color-emphasis-100);
+}
+
+.comparisonTable td {
+  padding: 0.875rem 1.25rem;
+  border: none;
+  vertical-align: middle;
+}
+
+/* Feature name cell */
+.featureName {
+  font-weight: 500;
+  color: var(--ifm-heading-color);
+}
+
+/* Value cells */
+.valueCell {
+  text-align: center;
+}
+
+/* Boolean indicators */
+.checkIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background-color: #10b981;
+  color: white;
+}
+
+.crossIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background-color: #ef4444;
+  color: white;
+}
+
+.partialIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background-color: #f59e0b;
+  color: white;
+}
+
+/* Text values */
+.textValue {
+  font-size: 0.9rem;
+  color: var(--ifm-color-emphasis-700);
+}
+
+/* Highlighted row (for BootifyJS) */
+.highlightedColumn {
+  background-color: rgba(37, 99, 235, 0.05);
+}
+
+/* Caption */
+.caption {
+  padding: 0.75rem 1.25rem;
+  font-size: 0.85rem;
+  color: var(--ifm-color-emphasis-600);
+  background-color: var(--ifm-color-emphasis-100);
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+  text-align: center;
+}
+
+/* Legend */
+.legend {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 0.75rem 1.25rem;
+  background-color: var(--ifm-color-emphasis-100);
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+  font-size: 0.85rem;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.legendIcon {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* Dark mode adjustments */
+[data-theme='dark'] .comparisonContainer {
+  border-color: var(--ifm-color-emphasis-300);
+}
+
+[data-theme='dark'] .comparisonTable thead {
+  background: linear-gradient(135deg, var(--ifm-color-primary-dark), var(--ifm-color-primary-darker));
+}
+
+[data-theme='dark'] .comparisonTable tbody tr:hover {
+  background-color: var(--ifm-color-emphasis-200);
+}
+
+[data-theme='dark'] .highlightedColumn {
+  background-color: rgba(96, 165, 250, 0.1);
+}
+
+[data-theme='dark'] .caption,
+[data-theme='dark'] .legend {
+  background-color: var(--ifm-color-emphasis-200);
+  border-color: var(--ifm-color-emphasis-300);
+}

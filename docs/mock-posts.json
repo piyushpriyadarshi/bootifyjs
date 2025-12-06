@@ -1,0 +1,27 @@
+{
+  "posts": [
+    {
+      "id": "1",
+      "slug": "getting-started-with-bootifyjs",
+      "title": "Getting Started with BootifyJS in 5 Minutes",
+      "excerpt": "Learn how to set up a BootifyJS project from scratch and create your first API endpoint in just 5 minutes.",
+      "content": "## Prerequisites\n\nBefore we begin, make sure you have:\n\n- Node.js 20 or higher\n- npm or yarn\n- A code editor (VS Code recommended)\n\n## Step 1: Create a New Project\n\n```bash\nmkdir my-bootify-app\ncd my-bootify-app\nnpm init -y\nnpm install bootifyjs\n```\n\n## Step 2: Create Your First Controller\n\nCreate `src/app.ts`:\n\n```typescript\nimport { BootifyApp, Controller, Get } from 'bootifyjs';\n\n@Controller('/api')\nclass HelloController {\n  @Get('/hello')\n  sayHello() {\n    return { message: 'Hello, BootifyJS!' };\n  }\n}\n\nconst app = new BootifyApp();\napp.start();\n```\n\n## Step 3: Run Your App\n\n```bash\nnpx ts-node src/app.ts\n```\n\nVisit `http://localhost:3000/api/hello` and you'll see your first response!\n\n## What's Next?\n\n- Add dependency injection with `@Injectable()`\n- Set up configuration with Zod schemas\n- Add authentication middleware\n\nCheck out the [full documentation](/docs/intro) for more.",
+      "author": "piyush",
+      "tags": ["tutorial", "typescript"],
+      "publishedAt": "2024-12-05T10:00:00Z",
+      "image": "/img/blog/getting-started.png",
+      "draft": false
+    },
+    {
+      "id": "2",
+      "slug": "bootifyjs-vs-nestjs",
+      "title": "BootifyJS vs NestJS: A Performance Comparison",
+      "excerpt": "We benchmarked BootifyJS against NestJS to see how they compare in real-world scenarios. The results might surprise you.",
+      "content": "## The Benchmark Setup\n\nWe tested both frameworks with:\n\n- Simple JSON response endpoint\n- Database query endpoint (PostgreSQL)\n- File upload endpoint\n\n## Results\n\n| Scenario | BootifyJS | NestJS | Difference |\n|----------|-----------|--------|------------|\n| JSON Response | 76,835 req/s | 35,200 req/s | +118% |\n| DB Query | 12,450 req/s | 8,320 req/s | +50% |\n| File Upload | 2,100 req/s | 1,850 req/s | +14% |\n\n## Why the Difference?\n\nBootifyJS is built on Fastify, which uses:\n\n1. **Schema-based serialization** - JSON responses are serialized using pre-compiled schemas\n2. **Efficient routing** - Radix tree-based router\n3. **Minimal overhead** - Less abstraction layers\n\n## When to Choose Each\n\n**Choose BootifyJS if:**\n- Performance is critical\n- You want Fastify's ecosystem\n- You prefer lighter abstractions\n\n**Choose NestJS if:**\n- You need GraphQL/microservices out of the box\n- Your team knows Angular patterns\n- You need extensive documentation\n\n## Conclusion\n\nBoth are excellent frameworks. BootifyJS shines when raw performance matters.",
+      "author": "bootifyjs",
+      "tags": ["performance", "architecture"],
+      "publishedAt": "2024-12-06T14:30:00Z",
+      "draft": false
+    }
+  ]
+}

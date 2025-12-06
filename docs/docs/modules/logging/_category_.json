@@ -1,0 +1,8 @@
+{
+  "label": "Logging",
+  "position": 4,
+  "link": {
+    "type": "generated-index",
+    "description": "Learn how to use BootifyJS's powerful logging system with structured logging, request context, and multiple transports including ClickHouse and PostHog."
+  }
+}

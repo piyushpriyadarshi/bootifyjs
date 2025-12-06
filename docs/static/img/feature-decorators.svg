@@ -1,0 +1,22 @@
+<svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <!-- Decorators icon -->
+  <circle cx="60" cy="60" r="55" fill="#fef3c7" stroke="#f59e0b" stroke-width="2"/>
+  
+  <!-- Code block -->
+  <rect x="20" y="30" width="80" height="60" rx="4" fill="#ffffff" stroke="#d97706" stroke-width="2"/>
+  
+  <!-- Decorator symbols -->
+  <text x="30" y="50" font-family="monospace" font-size="16" font-weight="bold" fill="#f59e0b">@</text>
+  <text x="40" y="50" font-family="monospace" font-size="12" fill="#92400e">Controller</text>
+  
+  <text x="30" y="68" font-family="monospace" font-size="16" font-weight="bold" fill="#f59e0b">@</text>
+  <text x="40" y="68" font-family="monospace" font-size="12" fill="#92400e">Get</text>
+  
+  <text x="30" y="82" font-family="monospace" font-size="12" fill="#6b7280">method() {}</text>
+  
+  <!-- Sparkles -->
+  <circle cx="15" cy="20" r="3" fill="#fbbf24"/>
+  <circle cx="105" cy="25" r="2" fill="#fbbf24"/>
+  <circle cx="110" cy="95" r="3" fill="#fbbf24"/>
+  <circle cx="12" cy="100" r="2" fill="#fbbf24"/>
+</svg>

@@ -1,0 +1,140 @@
+/* CodeBlock Container */
+.codeBlockContainer {
+  margin: 1.5rem 0;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid var(--ifm-color-emphasis-200);
+  background-color: var(--ifm-code-background);
+}
+
+/* Title bar with file name */
+.codeBlockTitle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  background-color: var(--ifm-color-emphasis-100);
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+  font-size: 0.85rem;
+}
+
+.fileName {
+  font-weight: 600;
+  color: var(--ifm-color-emphasis-800);
+  font-family: var(--ifm-font-family-monospace);
+}
+
+.languageBadge {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 0.25rem;
+  background-color: var(--ifm-color-primary);
+  color: white;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+/* Code block wrapper for positioning */
+.codeBlockWrapper {
+  position: relative;
+}
+
+/* Copy button */
+.copyButton {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.6rem;
+  border: none;
+  border-radius: 0.375rem;
+  background-color: var(--ifm-color-emphasis-200);
+  color: var(--ifm-color-emphasis-700);
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.copyButton:hover {
+  background-color: var(--ifm-color-emphasis-300);
+  color: var(--ifm-color-emphasis-900);
+}
+
+.copyButton.copied {
+  background-color: #10b981;
+  color: white;
+}
+
+.copyText {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .copyText {
+    display: inline;
+  }
+}
+
+/* Code block */
+.codeBlock {
+  margin: 0;
+  padding: 1rem;
+  overflow-x: auto;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  background-color: var(--ifm-code-background);
+}
+
+/* Code line */
+.codeLine {
+  display: flex;
+}
+
+.codeLine.highlighted {
+  background-color: var(--docusaurus-highlighted-code-line-bg);
+  margin: 0 -1rem;
+  padding: 0 1rem;
+}
+
+/* Line numbers */
+.lineNumber {
+  display: inline-block;
+  width: 2.5rem;
+  text-align: right;
+  padding-right: 1rem;
+  color: var(--ifm-color-emphasis-400);
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.lineContent {
+  flex: 1;
+  white-space: pre;
+}
+
+/* Dark mode adjustments */
+[data-theme='dark'] .codeBlockContainer {
+  border-color: var(--ifm-color-emphasis-300);
+}
+
+[data-theme='dark'] .codeBlockTitle {
+  background-color: var(--ifm-color-emphasis-200);
+  border-color: var(--ifm-color-emphasis-300);
+}
+
+[data-theme='dark'] .fileName {
+  color: var(--ifm-color-emphasis-900);
+}
+
+[data-theme='dark'] .copyButton {
+  background-color: var(--ifm-color-emphasis-300);
+  color: var(--ifm-color-emphasis-800);
+}
+
+[data-theme='dark'] .copyButton:hover {
+  background-color: var(--ifm-color-emphasis-400);
+}

@@ -1,0 +1,26 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="95" fill="#2563eb" stroke="#1e40af" stroke-width="3"/>
+  
+  <!-- Boot shape -->
+  <g transform="translate(100, 100)">
+    <!-- Boot body -->
+    <path d="M -30 -40 L -30 20 L -20 30 L 20 30 L 30 20 L 30 -10 L 20 -20 L 10 -20 L 10 -40 Z" 
+          fill="#ffffff" stroke="#1e40af" stroke-width="2"/>
+    
+    <!-- Boot sole -->
+    <rect x="-30" y="20" width="60" height="15" rx="3" fill="#f59e0b" stroke="#d97706" stroke-width="2"/>
+    
+    <!-- Boot laces -->
+    <line x1="-15" y1="-35" x2="15" y2="-25" stroke="#1e40af" stroke-width="2"/>
+    <line x1="-15" y1="-25" x2="15" y2="-15" stroke="#1e40af" stroke-width="2"/>
+    <line x1="-15" y1="-15" x2="15" y2="-5" stroke="#1e40af" stroke-width="2"/>
+    
+    <!-- JS letters -->
+    <text x="-8" y="10" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#2563eb">JS</text>
+  </g>
+  
+  <!-- Lightning bolt for speed -->
+  <path d="M 145 60 L 135 85 L 145 85 L 135 110 L 155 85 L 145 85 Z" 
+        fill="#fbbf24" stroke="#f59e0b" stroke-width="1.5"/>
+</svg>

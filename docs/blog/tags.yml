@@ -1,0 +1,34 @@
+release:
+  label: Release
+  description: New releases and version updates
+  permalink: /release
+
+tutorial:
+  label: Tutorial
+  description: Step-by-step guides and tutorials
+  permalink: /tutorial
+
+announcement:
+  label: Announcement
+  description: Important announcements
+  permalink: /announcement
+
+performance:
+  label: Performance
+  description: Performance tips and benchmarks
+  permalink: /performance
+
+architecture:
+  label: Architecture
+  description: Architecture patterns and best practices
+  permalink: /architecture
+
+typescript:
+  label: TypeScript
+  description: TypeScript tips and patterns
+  permalink: /typescript
+
+fastify:
+  label: Fastify
+  description: Fastify integration and plugins
+  permalink: /fastify

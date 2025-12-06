@@ -1,0 +1,14 @@
+<svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <!-- Type-safe icon -->
+  <circle cx="60" cy="60" r="55" fill="#e0e7ff" stroke="#6366f1" stroke-width="2"/>
+  
+  <!-- Shield shape -->
+  <path d="M 60 20 L 85 30 L 85 60 Q 85 85 60 95 Q 35 85 35 60 L 35 30 Z" 
+        fill="#6366f1" stroke="#4f46e5" stroke-width="2"/>
+  
+  <!-- TypeScript TS -->
+  <text x="60" y="65" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="#ffffff" text-anchor="middle">TS</text>
+  
+  <!-- Checkmark -->
+  <path d="M 50 55 L 56 62 L 70 45" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

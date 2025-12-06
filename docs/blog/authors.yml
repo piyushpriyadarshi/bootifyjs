@@ -1,0 +1,17 @@
+bootifyjs:
+  name: BootifyJS Team
+  title: Core Team
+  url: https://github.com/bootifyjs
+  image_url: https://github.com/bootifyjs.png
+  page: true
+  socials:
+    github: bootifyjs
+
+piyush:
+  name: Piyush Priyadarshi
+  title: Creator of BootifyJS
+  url: https://github.com/piyushpriyadarshi
+  image_url: https://github.com/piyushpriyadarshi.png
+  page: true
+  socials:
+    github: piyushpriyadarshi

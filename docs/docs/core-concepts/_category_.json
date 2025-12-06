@@ -1,0 +1,8 @@
+{
+  "label": "Core Concepts",
+  "position": 3,
+  "link": {
+    "type": "generated-index",
+    "description": "Understand the fundamental concepts and architecture of BootifyJS. Learn about dependency injection, decorators, application lifecycle, and request context."
+  }
+}

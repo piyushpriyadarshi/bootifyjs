@@ -3,13 +3,12 @@ import { FastifyInstance } from "fastify";
 import "reflect-metadata";
 import z from "zod";
 import { createBootify } from "../BootifyApp";
-import { ComponentCategory } from "../logging/core/enhanced-startup-logger";
 import { HealthController } from "./controllers/health.controller";
 import { TodoController } from "./controllers/todo.controller";
 
 dotenv.config();
 
-// Example: Using Enhanced Startup Logger with all features
+// Example: Using Streaming Startup Logger (Spring Boot style)
 
 const envSchema = z.object({
     NODE_ENV: z.string().min(1),
@@ -46,67 +45,33 @@ async function main() {
 
         // Initialize Database with proper logging
         .beforeStart(async () => {
-            startupLogger.logComponentStart('PostgreSQL', ComponentCategory.DATABASE, {
-                host: 'localhost',
-                port: 5432,
-            });
+            startupLogger.logComponentStart('PostgreSQL', 'localhost:5432');
 
             try {
                 await mockDatabase.connect();
-                startupLogger.logComponentComplete('PostgreSQL', {
-                    connected: true,
-                    poolSize: 10,
-                });
-
-                // Register health check
-                startupLogger.registerHealthCheck('database', async () => {
-                    try {
-                        await mockDatabase.query('SELECT 1');
-                        return true;
-                    } catch {
-                        return false;
-                    }
-                });
+                startupLogger.logComponentComplete();
             } catch (error) {
-                startupLogger.logComponentFailed('PostgreSQL', error as Error, {
-                    host: 'localhost',
-                    port: 5432,
-                });
+                startupLogger.logComponentFailed(error as Error);
                 throw error;
             }
         })
 
         // Initialize Redis with proper logging
         .beforeStart(async () => {
-            startupLogger.logComponentStart('Redis', ComponentCategory.CACHE, {
-                host: 'localhost',
-                port: 6379,
-            });
+            startupLogger.logComponentStart('Redis', 'localhost:6379');
 
             try {
                 await mockRedis.connect();
-                startupLogger.logComponentComplete('Redis', {
-                    connected: true,
-                });
-
-                // Register health check
-                startupLogger.registerHealthCheck('redis', async () => {
-                    try {
-                        await mockRedis.ping();
-                        return true;
-                    } catch {
-                        return false;
-                    }
-                });
+                startupLogger.logComponentComplete();
             } catch (error) {
-                startupLogger.logComponentFailed('Redis', error as Error);
+                startupLogger.logComponentFailed(error as Error);
                 throw error;
             }
         })
 
         // Register Swagger plugin
         .usePlugin(async (app: FastifyInstance) => {
-            startupLogger.logComponentStart('Swagger', ComponentCategory.PLUGIN);
+            startupLogger.logComponentStart('Swagger');
 
             const fastifySwagger = await import("@fastify/swagger");
             const fastifySwaggerUI = await import("@fastify/swagger-ui");
@@ -126,7 +91,7 @@ async function main() {
                 routePrefix: "/api-docs",
             });
 
-            startupLogger.logComponentComplete('Swagger');
+            startupLogger.logComponentComplete();
         })
 
         // Register controllers
@@ -135,11 +100,7 @@ async function main() {
         // After start - show helpful info
         .afterStart(async () => {
             logger.info('🎉 Application is ready to accept requests!');
-            logger.info('📚 Try these commands to see different startup modes:');
-            logger.info('   STARTUP_MODE=silent npm run dev');
-            logger.info('   STARTUP_MODE=verbose npm run dev');
-            logger.info('   STARTUP_MODE=debug npm run dev');
-            logger.info('   STARTUP_MODE=json npm run dev');
+            logger.info('📚 API Documentation available at /api-docs');
         })
 
         .build();

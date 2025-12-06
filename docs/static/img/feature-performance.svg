@@ -1,0 +1,23 @@
+<svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <!-- Performance icon -->
+  <circle cx="60" cy="60" r="55" fill="#fce7f3" stroke="#db2777" stroke-width="2"/>
+  
+  <!-- Speedometer -->
+  <circle cx="60" cy="70" r="35" fill="#ffffff" stroke="#be185d" stroke-width="3"/>
+  <circle cx="60" cy="70" r="5" fill="#be185d"/>
+  
+  <!-- Speed marks -->
+  <line x1="35" y1="55" x2="40" y2="58" stroke="#be185d" stroke-width="3"/>
+  <line x1="30" y1="70" x2="37" y2="70" stroke="#be185d" stroke-width="3"/>
+  <line x1="35" y1="85" x2="40" y2="82" stroke="#be185d" stroke-width="3"/>
+  
+  <line x1="85" y1="55" x2="80" y2="58" stroke="#be185d" stroke-width="3"/>
+  <line x1="90" y1="70" x2="83" y2="70" stroke="#be185d" stroke-width="3"/>
+  <line x1="85" y1="85" x2="80" y2="82" stroke="#be185d" stroke-width="3"/>
+  
+  <!-- Needle pointing to high speed -->
+  <line x1="60" y1="70" x2="78" y2="58" stroke="#db2777" stroke-width="3" stroke-linecap="round"/>
+  
+  <!-- Lightning bolt -->
+  <path d="M 60 20 L 55 35 L 62 35 L 57 50 L 68 35 L 61 35 Z" fill="#fbbf24" stroke="#f59e0b" stroke-width="1.5"/>
+</svg>

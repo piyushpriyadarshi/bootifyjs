@@ -1,0 +1,8 @@
+{
+  "label": "Modules",
+  "position": 4,
+  "link": {
+    "type": "generated-index",
+    "description": "Explore BootifyJS modules including Core, Events, Cache, Logging, Auth, and Config. Each module provides powerful features for building modern Node.js applications."
+  }
+}

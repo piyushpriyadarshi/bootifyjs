@@ -1,0 +1,8 @@
+{
+  "label": "Events",
+  "position": 2,
+  "link": {
+    "type": "generated-index",
+    "description": "Learn about BootifyJS's powerful event-driven architecture. Implement publish-subscribe patterns with standard or high-performance buffered event processing."
+  }
+}

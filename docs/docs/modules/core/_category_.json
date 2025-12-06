@@ -1,0 +1,8 @@
+{
+  "label": "Core",
+  "position": 1,
+  "link": {
+    "type": "generated-index",
+    "description": "Learn about the Core module of BootifyJS including controllers, services, routing, and validation. The foundation for building web applications."
+  }
+}
