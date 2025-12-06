@@ -8,7 +8,8 @@ import {
   Get,
   Param,
   Post,
-  Schema
+  Schema,
+  Swagger
 } from '../../core/decorators'
 import { container } from '../../core/di-container'
 import { RequestContextService } from '../../core/request-context.service'
@@ -54,6 +55,11 @@ export class TodoController {
   private logger!: Logger
 
   @Get('/')
+  @Swagger({
+    summary: 'Get all todos',
+    description: 'Retrieves a list of all todo items',
+    tags: ['Todos'],
+  })
   getAllTodos() {
     const context = container.resolve<RequestContextService>(RequestContextService)
     // const span = this.tracingService.spanStart('get.all.todos', {
@@ -72,6 +78,11 @@ export class TodoController {
 
   @Get('/:id')
   @Cacheable({ key: 'todo', ttl: 60 })
+  @Swagger({
+    summary: 'Get todo by ID',
+    description: 'Retrieves a single todo item by its unique identifier',
+    tags: ['Todos'],
+  })
   getTodoById(@Param('id') id: string) {
     this.logger.info('Hello from get todo by id')
     return this.todoService.getTodoById(id)
@@ -91,6 +102,12 @@ export class TodoController {
         completed: z.boolean(),
       }),
     },
+  })
+  @Swagger({
+    summary: 'Create a new todo',
+    description: 'Creates a new todo item with the provided text',
+    tags: ['Todos'],
+    operationId: 'createTodo',
   })
   // @UseMiddleware(authorize(['manager']))
   async createTodo(@Body() body: z.infer<typeof todoSchema>) {

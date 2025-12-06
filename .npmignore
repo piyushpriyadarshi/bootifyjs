@@ -1,1 +1,9 @@
 dist/examples
+
+docs/
+bootifyjs-cli/
+.vscode/
+.marscode/
+.kiro/
+node_modules/
+trace_dashboard/

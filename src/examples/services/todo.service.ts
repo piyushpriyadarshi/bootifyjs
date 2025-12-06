@@ -6,7 +6,6 @@ import { TodoRepository } from '../repositories/todo.repository'
 
 @Service()
 export class TodoService {
-  // constructor(private readonly repository: TodoRepository) { }
 
   @Autowired()
   private readonly eventBus!: EventBusService

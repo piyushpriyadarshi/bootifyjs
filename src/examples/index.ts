@@ -1,20 +1,23 @@
 import dotenv from "dotenv";
+import { FastifyInstance } from "fastify";
 import "reflect-metadata";
-import { createBootifyApp } from "../api";
-import { FastifyMiddleware } from "../core/decorators";
-import { container } from "../core/di-container";
-import { HealthController } from "./controllers/health.controller";
-import { TodoController } from "./controllers/todo.controller";
-dotenv.config();
-// import { bootstrapCache } from '../cache/bootstrap'
 import z from "zod";
 import {
   registerJWTAuthRoutes,
   setupJwtAuth,
 } from "../auth/examples/basic-usage";
+import { createBootify } from "../BootifyApp";
 import { bootstrapCache } from "../cache";
+import { FastifyMiddleware } from "../core/decorators";
+import { container } from "../core/di-container";
+import { HealthController } from "./controllers/health.controller";
+import { TodoController } from "./controllers/todo.controller";
+dotenv.config();
 // Import the RedisCacheStore to trigger @Service decorator registration
 import "../cache/stores/redis-cache.store";
+import { createContextMiddleware } from "../middleware";
+// Import scheduled tasks service to register it with DI
+import "./services/scheduled-tasks.service";
 
 // --- Application Startup ---
 
@@ -68,65 +71,102 @@ const requestLoggingMiddleware: FastifyMiddleware = async (request, reply) => {
 };
 
 async function main() {
-  //   await intitializeLogging()
-
+  // Setup JWT authentication
   const { middleware: jwtAuthMiddleware, authManager } = await setupJwtAuth();
 
   // Register authManager in DI container for controller injection
   container.register("AuthManager", { useFactory: () => authManager });
 
-  const allComponents = Array.from(container.getRegisteredComponents());
-  // await bootstrapEventSystem(allComponents, { useBufferedProcessing: true })
-  await bootstrapCache();
+  const { app, start } = await createBootify()
+    // Configuration
+    .useConfig(envSchema)
+    .setPort(8080)
 
-  const { app, start } = await createBootifyApp({
-    controllers: [HealthController, TodoController],
-    enableSwagger: true,
-    port: 8080,
-    configSchema: envSchema,
-    globalMiddlewares: [
-      // jwtAuthMiddleware.authenticate({
-      //   strategies: ['jwt', 'api-key'],
-      //   skipPaths: ['/auth/login', '/auth/refresh', '/health']
-      // }),
-      corsMiddleware, // 1st: Handle CORS headers
-      securityHeadersMiddleware, // 2nd: Add security headers
-      requestTimingMiddleware, // 3rd: Start request timing
-      requestLoggingMiddleware, // 4th: Log request details
-    ],
-    enableCookie: true,
-  });
+    // Initialize services before start
+    .beforeStart(async () => {
+      console.log("🔧 Initializing services...");
 
-  await registerJWTAuthRoutes(app, authManager, jwtAuthMiddleware);
+      // Bootstrap cache
+      await bootstrapCache();
 
-  // Setup context middleware with authentication
-  // app.addHook('onRequest', createContextMiddleware(authContextExtractor));
+      console.log("✅ Services initialized");
+    })
 
-  // console.log('All components:', container.getRegisteredComponents())
-  // const animal = container.resolve<Animal>('Animal')
+    // Register Cookie plugin
+    .usePlugin(async (app: FastifyInstance) => {
+      const fastifyCookie = await import("@fastify/cookie");
+      await app.register(fastifyCookie.default, {
+        hook: "onRequest",
+        parseOptions: {},
+      });
+    })
 
-  // //   console.log(animal)
-  // const animalservice: AnimalService = container.resolve<AnimalService>(AnimalService)
-  // console.log(animalservice.animal === animalservice.animal1)
-  // console.log(animalservice.animal.name)
+    // Register Swagger
+    .usePlugin(async (app: FastifyInstance) => {
+      await app.addHook("onRequest", createContextMiddleware());
+      const fastifySwagger = await import("@fastify/swagger");
+      const fastifySwaggerUI = await import("@fastify/swagger-ui");
 
-  // console.log('🚀 BootifyJS Example Server starting...');
-  // console.log('🔧 Global middlewares enabled: CORS, Security Headers, Request Timing, Request Logging');
-  // console.log('📊 Available endpoints:');
-  // console.log('  GET /todos - List all todos (requires authentication)');
-  // console.log('  POST /todos - Create a new todo (requires authentication)');
-  // console.log('  GET /todos/:id - Get a specific todo (requires authentication)');
-  // console.log('  PUT /todos/:id - Update a todo (requires authentication)');
-  // console.log('  DELETE /todos/:id - Delete a todo (requires authentication)');
-  // console.log('  GET /animals - List all animals');
-  // console.log('  POST /animals - Create a new animal');
-  // console.log('🔐 Authentication endpoints:');
-  // console.log('  POST /auth/login - Login to get JWT token');
-  // console.log('  GET /auth/info - Check authentication status');
-  // console.log('💡 Use @UseMiddleware(authenticate()) decorator for protected routes!');
-  // console.log('🔑 Test credentials: admin/admin123, manager/manager123, user/user123');
-  // console.log('🌐 CORS enabled for all origins');
-  // console.log('🔒 Security headers automatically added to all responses');
+      await app.register(fastifySwagger.default, {
+        openapi: {
+          info: {
+            title: "Bootify (Fastify) API",
+            description: "API documentation",
+            version: "1.0.0",
+          },
+          servers: [{ url: `http://localhost:8080` }],
+        },
+      });
+
+      await app.register(fastifySwaggerUI.default, {
+        routePrefix: "/api-docs",
+      });
+    })
+
+    // Register global middlewares in order
+    .useMiddlewares([
+      corsMiddleware,              // 1st: Handle CORS headers
+      securityHeadersMiddleware,   // 2nd: Add security headers
+      requestTimingMiddleware,     // 3rd: Start request timing
+      requestLoggingMiddleware,    // 4th: Log request details
+    ])
+
+    // Register controllers
+    .useControllers([HealthController, TodoController])
+
+    // Register JWT auth routes after app is built
+    .beforeStart(async (app: FastifyInstance) => {
+      await registerJWTAuthRoutes(app, authManager, jwtAuthMiddleware);
+    })
+
+    // After start hook
+    .afterStart(async (app: FastifyInstance) => {
+      console.log("🚀 BootifyJS Example Server started!");
+      console.log("📋 Scheduled jobs are running in the background");
+    })
+
+    .build();
+
+  // Add scheduler status endpoint
+  app.get('/scheduler/status', async () => {
+    const { SchedulerService } = await import('../scheduling')
+    const scheduler = container.resolve<typeof SchedulerService>(SchedulerService)
+    return (scheduler as any).getStats()
+  })
+
+  // Add manual trigger endpoint
+  app.post('/scheduler/trigger/:jobName', async (request, reply) => {
+    const { jobName } = request.params as { jobName: string }
+    try {
+      const { SchedulerService } = await import('../scheduling')
+      const scheduler = container.resolve<typeof SchedulerService>(SchedulerService)
+      await (scheduler as any).trigger(jobName)
+      return { success: true, message: `Job '${jobName}' triggered` }
+    } catch (error: any) {
+      reply.status(404)
+      return { success: false, error: error.message }
+    }
+  })
 
   await start();
 }

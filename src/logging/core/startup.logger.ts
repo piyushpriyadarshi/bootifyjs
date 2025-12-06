@@ -1,7 +1,7 @@
+import * as os from 'os'
+import { DEFAULT_SERVER_PORT } from '../../constants'
 import { Autowired, Service } from '../../core'
 import { Logger } from './logger'
-import { DEFAULT_SERVER_PORT } from '../../constants'
-import * as os from 'os'
 
 interface StartupLogPayload {
   component: string
@@ -104,7 +104,7 @@ export class StartupLoggerService {
   }
 
   private createStartupBanner(): string {
-    const version = process.env.SERVICE_VERSION || '1.0.0'
+    const version = this.getVersion()
     return `
   ____              _   _  __       _ ____  
  |  _ \\            | | (_)/ _|     | / ___| 
@@ -117,6 +117,34 @@ export class StartupLoggerService {
 
  :: BootifyJS Framework ::        (v${version})
 `
+  }
+
+  private getVersion(): string {
+    try {
+      // Try to read from package.json
+      const fs = require('fs')
+      const path = require('path')
+
+      // Look for package.json in common locations
+      const possiblePaths = [
+        path.join(process.cwd(), 'package.json'),
+        path.join(__dirname, '../../../package.json'),
+        path.join(__dirname, '../../package.json'),
+      ]
+
+      for (const pkgPath of possiblePaths) {
+        if (fs.existsSync(pkgPath)) {
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
+          if (pkg.version) {
+            return pkg.version
+          }
+        }
+      }
+    } catch (error) {
+      // Fallback to environment variable or default
+    }
+
+    return process.env.SERVICE_VERSION || '1.0.0'
   }
 
   private formatMemory(bytes: number): string {

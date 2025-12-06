@@ -1,132 +1,132 @@
-import { FastifyReply, FastifyRequest } from 'fastify';
-import jwt from 'jsonwebtoken';
-import { AppConfig } from '../config';
-import { RequestContextService } from '../core';
+// import { FastifyReply, FastifyRequest } from 'fastify';
+// import jwt from 'jsonwebtoken';
+// import { AppConfig } from '../config';
+// import { RequestContextService } from '../core';
 
-// Simple in-memory cache for demonstration (replace with Redis in production)
-class TokenCache {
-  private cache = new Map<string, any>();
-  private timers = new Map<string, NodeJS.Timeout>();
+// // Simple in-memory cache for demonstration (replace with Redis in production)
+// class TokenCache {
+//   private cache = new Map<string, any>();
+//   private timers = new Map<string, NodeJS.Timeout>();
 
-  set(key: string, value: any, expiresInSeconds: number): void {
-    this.cache.set(key, value);
+//   set(key: string, value: any, expiresInSeconds: number): void {
+//     this.cache.set(key, value);
 
-    // Clear existing timer if any
-    const existingTimer = this.timers.get(key);
-    if (existingTimer) {
-      clearTimeout(existingTimer);
-    }
+//     // Clear existing timer if any
+//     const existingTimer = this.timers.get(key);
+//     if (existingTimer) {
+//       clearTimeout(existingTimer);
+//     }
 
-    // Set new expiration timer
-    const timer = setTimeout(() => {
-      this.cache.delete(key);
-      this.timers.delete(key);
-    }, expiresInSeconds * 1000);
+//     // Set new expiration timer
+//     const timer = setTimeout(() => {
+//       this.cache.delete(key);
+//       this.timers.delete(key);
+//     }, expiresInSeconds * 1000);
 
-    this.timers.set(key, timer);
-  }
+//     this.timers.set(key, timer);
+//   }
 
-  get(key: string): any {
-    return this.cache.get(key);
-  }
+//   get(key: string): any {
+//     return this.cache.get(key);
+//   }
 
-  delete(key: string): void {
-    this.cache.delete(key);
-    const timer = this.timers.get(key);
-    if (timer) {
-      clearTimeout(timer);
-      this.timers.delete(key);
-    }
-  }
-}
+//   delete(key: string): void {
+//     this.cache.delete(key);
+//     const timer = this.timers.get(key);
+//     if (timer) {
+//       clearTimeout(timer);
+//       this.timers.delete(key);
+//     }
+//   }
+// }
 
-const tokenCache = new TokenCache();
+// const tokenCache = new TokenCache();
 
-// JWT verification function (replace with your worker implementation)
-const verifyJwtToken = async ({ token, tokenSecret }: { token: string; tokenSecret: string }) => {
+// // JWT verification function (replace with your worker implementation)
+// const verifyJwtToken = async ({ token, tokenSecret }: { token: string; tokenSecret: string }) => {
 
-  const appConfig = AppConfig.getInstance();
-  const jwtSecret = appConfig.get('JWT_SECRET');
+//   const appConfig = AppConfig.getInstance();
+//   const jwtSecret = appConfig.get('JWT_SECRET');
 
-  console.log(`Verifying token: ${token}`)
-  console.log(`Token secret: ${tokenSecret}`);
-  console.log(`Token JWT secret: ${jwtSecret}`);
-
-
-  try {
-    const decoded = jwt.verify(token, jwtSecret) as any;
-    return decoded;
-  } catch (error) {
-    console.log(error)
-    throw new Error('Invalid token');
-  }
-};
-
-/**
- * Authentication middleware factory
- * @param tokenSecret JWT secret for token verification
- * @returns Fastify middleware function
- */
-function authenticate(tokenSecret: string) {
-  return async function (request: FastifyRequest, reply: FastifyReply) {
-    try {
-      // Extract token from headers
+//   console.log(`Verifying token: ${token}`)
+//   console.log(`Token secret: ${tokenSecret}`);
+//   console.log(`Token JWT secret: ${jwtSecret}`);
 
 
-      const contextService = new RequestContextService()
+//   try {
+//     const decoded = jwt.verify(token, jwtSecret) as any;
+//     return decoded;
+//   } catch (error) {
+//     console.log(error)
+//     throw new Error('Invalid token');
+//   }
+// };
 
-      console.log('Token Secret', tokenSecret)
-      const accessToken =
-        request.headers.Authorization || request.headers.authorization;
+// /**
+//  * Authentication middleware factory
+//  * @param tokenSecret JWT secret for token verification
+//  * @returns Fastify middleware function
+//  */
+// function authenticate(tokenSecret: string) {
+//   return async function (request: FastifyRequest, reply: FastifyReply) {
+//     try {
+//       // Extract token from headers
 
-      if (!accessToken) {
-        (request as any).authenticated = false;
-        return;
-      }
 
-      console.log(`Access token: ${accessToken}`);
+//       const contextService = new RequestContextService()
 
-      // Check cache first
-      const cachedToken = tokenCache.get(`token:${accessToken}`);
+//       console.log('Token Secret', tokenSecret)
+//       const accessToken =
+//         request.headers.Authorization || request.headers.authorization;
 
-      if (cachedToken) {
-        // Token found in cache
-        (request as any).user = cachedToken;
-        (request as any).authenticated = true;
-        console.log('Token found in cache');
-        return;
-      }
+//       if (!accessToken) {
+//         (request as any).authenticated = false;
+//         return;
+//       }
 
-      // Verify token if not in cache
-      try {
-        const verifiedToken = await verifyJwtToken({
-          token: Array.isArray(accessToken) ? accessToken[0] : accessToken || "",
-          tokenSecret
-        });
+//       console.log(`Access token: ${accessToken}`);
 
-        // Calculate expiration time
-        const expiresIn = verifiedToken.exp - Math.floor(Date.now() / 1000);
+//       // Check cache first
+//       const cachedToken = tokenCache.get(`token:${accessToken}`);
 
-        // Cache the verified token
-        tokenCache.set(`token:${accessToken}`, verifiedToken, expiresIn);
+//       if (cachedToken) {
+//         // Token found in cache
+//         (request as any).user = cachedToken;
+//         (request as any).authenticated = true;
+//         console.log('Token found in cache');
+//         return;
+//       }
 
-        (request as any).user = verifiedToken;
-        (request as any).authenticated = true;
-        contextService.set('user', verifiedToken)
+//       // Verify token if not in cache
+//       try {
+//         const verifiedToken = await verifyJwtToken({
+//           token: Array.isArray(accessToken) ? accessToken[0] : accessToken || "",
+//           tokenSecret
+//         });
 
-      } catch (error) {
-        console.error('Error verifying token:', error);
-        (request as any).authenticated = false;
-        (request as any).user = null;
-      }
+//         // Calculate expiration time
+//         const expiresIn = verifiedToken.exp - Math.floor(Date.now() / 1000);
 
-    } catch (error) {
-      console.error('Authentication middleware error:', error);
-      (request as any).authenticated = false;
-      (request as any).user = null;
-    }
-  };
-}
+//         // Cache the verified token
+//         tokenCache.set(`token:${accessToken}`, verifiedToken, expiresIn);
 
-export default authenticate;
-export { authenticate, TokenCache };
+//         (request as any).user = verifiedToken;
+//         (request as any).authenticated = true;
+//         contextService.set('user', verifiedToken)
+
+//       } catch (error) {
+//         console.error('Error verifying token:', error);
+//         (request as any).authenticated = false;
+//         (request as any).user = null;
+//       }
+
+//     } catch (error) {
+//       console.error('Authentication middleware error:', error);
+//       (request as any).authenticated = false;
+//       (request as any).user = null;
+//     }
+//   };
+// }
+
+// export default authenticate;
+// export { authenticate, TokenCache };

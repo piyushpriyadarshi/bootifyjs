@@ -1,7 +1,7 @@
-import { FastifyInstance, FastifyRequest, FastifyReply, RouteOptions } from 'fastify'
+import { FastifyInstance, FastifyReply, FastifyRequest, RouteOptions } from 'fastify'
 import { zodToJsonSchema } from 'zod-to-json-schema'
-import { container, Constructor } from './di-container'
 import { METADATA_KEYS, ValidationDecoratorOptions } from './decorators'
+import { Constructor, container } from './di-container'
 
 // const buildJsonSchema = (schemas: any) => {
 //   const schema: any = {}
@@ -55,11 +55,33 @@ export function registerControllers(fastify: FastifyInstance, controllers: Const
 
       // console.log(validationSchemas)
       const url = `${prefix}${route.path}`.replace(/\/+/g, '/')
-      
+
+      // Get Swagger metadata if it exists
+      const swaggerMetadata = Reflect.getMetadata(
+        METADATA_KEYS.swaggerMetadata,
+        controllerInstance,
+        route.handlerName
+      )
+
+      // Build the schema, merging validation schemas with swagger metadata
+      let schema: any = validationSchemas ? buildFastifySchema(validationSchemas) : {}
+
+      if (swaggerMetadata) {
+        schema = {
+          ...schema,
+          summary: swaggerMetadata.summary,
+          description: swaggerMetadata.description,
+          tags: swaggerMetadata.tags,
+          deprecated: swaggerMetadata.deprecated,
+          operationId: swaggerMetadata.operationId,
+          security: swaggerMetadata.security,
+        }
+      }
+
       const routeOptions: RouteOptions = {
         method: route.method,
         url,
-        schema: validationSchemas ? buildFastifySchema(validationSchemas) : {},
+        schema,
         // 👇 Attach all middleware functions to the preHandler hook
         preHandler: allMiddlewares,
         handler: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -95,8 +117,7 @@ export function registerControllers(fastify: FastifyInstance, controllers: Const
 
       fastify.route(routeOptions)
       console.log(
-        `  ✓  Registered: ${route.method.padEnd(7)} ${url} (middlewares: ${
-          allMiddlewares.length
+        `  ✓  Registered: ${route.method.padEnd(7)} ${url} (middlewares: ${allMiddlewares.length
         })`
       )
     })

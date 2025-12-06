@@ -1,7 +1,6 @@
 "use strict";
 
 const build = require("pino-abstract-transport");
-const { PostHog } = require("posthog-node");
 
 module.exports = async function postHogTransport(options) {
   const {
@@ -22,36 +21,36 @@ module.exports = async function postHogTransport(options) {
       }
     });
   }
-  const posthog = new PostHog(apiKey, { host });
 
   // Configuration with defaults
   const {
-    MAX_BATCH_SIZE = 100,
-    FLUSH_INTERVAL = 5000,
-    REQUEST_TIMEOUT = 30000,
-    MAX_LOGS_PER_REQUEST = 50,
-    RETRY_DELAY = 1000,
+    BATCH_SIZE = 50,
+    FLUSH_INTERVAL = 2000,
     MAX_RETRIES = 3,
-    CLEANUP_INTERVAL = 60000,
-    STALE_TRACE_TIMEOUT = 300000,
+    RETRY_DELAY = 1000,
+    RETRY_BACKOFF = 2,
+    MAX_BATCH_SIZE_MB = 18, // 18MB safety margin (PostHog limit is 20MB)
   } = config;
+
+  const batchEndpoint = `${host}/batch/`;
 
   // Metrics tracking
   const metrics = {
     logsReceived: 0,
+    logEventsSent: 0,
+    apiRequestEventsSent: 0,
     logsDropped: 0,
-    tracesCreated: 0,
-    tracesFlushed: 0,
-    tracesDropped: 0,
-    retryAttempts: 0,
+    batchesSent: 0,
     parseErrors: 0,
-    flushErrors: 0,
+    sendErrors: 0,
+    retryAttempts: 0,
+    totalBatchSizeBytes: 0,
   };
 
-  const requestTraces = new Map();
-  let isFlushing = false;
+  // Buffer for batching events
+  const eventBuffer = [];
   let flushTimer = null;
-  let cleanupTimer = null;
+  let isFlushing = false;
 
   // Helper function to determine log type
   function determineLogType(log) {
@@ -62,157 +61,341 @@ module.exports = async function postHogTransport(options) {
     return "application";
   }
 
-  // Flush a specific request trace
-  async function flushRequestTrace(requestId, trace) {
-    if (!trace || trace.logs.length === 0) return;
+  // Helper to extract error details
+  function extractErrorDetails(log) {
+    const errorObj = log.err || log.error;
+    if (!errorObj || typeof errorObj !== "object") return null;
+
+    return {
+      message: errorObj.message || "",
+      stack: errorObj.stack || "",
+      code: errorObj.code || "",
+      type: errorObj.type || errorObj.name || "Error",
+    };
+  }
+
+  // Determine if we should create a log event
+  function shouldCreateLogEvent(log) {
+    // Don't create log event for access logs
+    if (log.logType === "access") {
+      return false;
+    }
+    return true;
+  }
+
+  // Determine if we should create an api_request event
+  function shouldCreateApiRequestEvent(log) {
+    // Only create api_request for access logs
+    if (log.logType === "access") {
+      return true;
+    }
+
+    // Legacy support: also check for HTTP component with method and status
+    if (log.component === "HTTP" && log.method && log.statusCode) {
+      return true;
+    }
+
+    return false;
+  }
+
+  // Estimate batch size in bytes
+  function estimateBatchSize(events) {
+    const batchRequest = {
+      api_key: apiKey,
+      batch: events,
+    };
+    const json = JSON.stringify(batchRequest);
+    return Buffer.byteLength(json, "utf8");
+  }
+
+  // Split events into batches that fit within size limit
+  function splitIntoBatches(events, maxSizeBytes) {
+    const batches = [];
+    let currentBatch = [];
+    let currentSize = 0;
+
+    // Rough estimate of base request size
+    const baseSize = Buffer.byteLength(
+      JSON.stringify({ api_key: apiKey, batch: [] }),
+      "utf8"
+    );
+
+    for (const event of events) {
+      const eventSize = Buffer.byteLength(JSON.stringify(event), "utf8");
+
+      // Check if adding this event would exceed the limit
+      if (
+        currentSize + eventSize + baseSize > maxSizeBytes &&
+        currentBatch.length > 0
+      ) {
+        // Start new batch
+        batches.push(currentBatch);
+        currentBatch = [event];
+        currentSize = eventSize;
+      } else {
+        currentBatch.push(event);
+        currentSize += eventSize;
+      }
+    }
+
+    if (currentBatch.length > 0) {
+      batches.push(currentBatch);
+    }
+
+    return batches;
+  }
+
+  // Create individual log event (PostHog batch format)
+  function createLogEvent(log) {
+    const logType = determineLogType(log);
+    const timestamp = log.timestamp || log.time || new Date().toISOString();
+    const errorDetails = extractErrorDetails(log);
+
+    return {
+      event: "log",
+      distinct_id: log.userId || log.username || "system",
+      timestamp,
+      properties: {
+        // Core log properties
+        level: log.level || "info",
+        message: log.msg || log.message || "",
+        log_type: logType,
+
+        // Service context
+        service: serviceName,
+        instance_id: instanceId,
+        environment: process.env.NODE_ENV || "development",
+
+        // Request context
+        request_id: log.requestId,
+        trace_id: log.traceId,
+        span_id: log.spanId,
+
+        // User context
+        user_id: log.userId,
+        username: log.username,
+
+        // Component/module info
+        component: log.component,
+        service_name: log.serviceName || serviceName,
+
+        // Additional context
+        context: log.context || log.additionalContext || {},
+
+        // Error details (if present)
+        ...(errorDetails && {
+          error_message: errorDetails.message,
+          error_stack: errorDetails.stack,
+          error_code: errorDetails.code,
+          error_type: errorDetails.type,
+          has_error: true,
+        }),
+
+        // Audit log specific
+        ...(log.action && {
+          audit_action: log.action,
+          audit_resource: log.resource,
+          audit_resource_id: log.resourceId,
+        }),
+
+        // Performance metrics
+        ...(log.duration && { duration_ms: log.duration }),
+
+        // Timestamp
+        timestamp,
+      },
+    };
+  }
+
+  // Create API metrics event (for HTTP access logs)
+  function createApiMetricsEvent(log) {
+    const timestamp = log.timestamp || log.time || new Date().toISOString();
+    const endpoint = `${log.method} ${log.url || log.path}`;
+    const isError = log.statusCode >= 400;
+
+    return {
+      event: "api_request",
+      distinct_id: log.userId || log.username || "anonymous",
+      timestamp,
+      properties: {
+        // Request details
+        method: log.method,
+        url: log.url || log.path,
+        endpoint,
+        status_code: log.statusCode,
+        response_time_ms: log.responseTime || log.duration,
+
+        // Classification
+        is_error: isError,
+        is_client_error: log.statusCode >= 400 && log.statusCode < 500,
+        is_server_error: log.statusCode >= 500,
+        is_success: log.statusCode >= 200 && log.statusCode < 300,
+
+        // Service context
+        service: serviceName,
+        instance_id: instanceId,
+        environment: process.env.NODE_ENV || "development",
+
+        // Request context
+        request_id: log.requestId,
+        trace_id: log.traceId,
+
+        // Client info
+        ip: log.ip,
+        user_agent: log.userAgent,
+
+        // User context
+        user_id: log.userId,
+        username: log.username,
+
+        // Timestamp
+        timestamp,
+      },
+    };
+  }
+
+  // Send batch to PostHog using batch API
+  async function sendBatchToPostHog(events, retryCount = 0) {
+    const batchRequest = {
+      api_key: apiKey,
+      batch: events,
+    };
 
     try {
-      const event = {
-        event: "request_trace",
-        distinctId: trace.userId || "system",
-        uuid: requestId,
-        properties: {
-          // Request metadata
-          request_id: requestId,
-          url: trace.url,
-          ip: trace.ip,
-          method: trace.method,
-          status_code: trace.statusCode,
-          response_time: trace.responseTime,
-          user_agent: trace.userAgent,
-          timestamp: trace.timestamp || new Date().toISOString(),
-
-          // Service information
-          service: serviceName,
-          instance_id: instanceId,
-          environment: process.env.NODE_ENV || "development",
-
-          // All logs that occurred during this request
-          logs: trace.logs.map((log) => ({
-            level: log.level,
-            type: log.type || "application",
-            service_name: log.serviceName || serviceName,
-            message: log.message,
-            timestamp: log.timestamp,
-            context: log.context || {},
-            component: log.component,
-            duration: log.duration,
-            ...(log.error && { error: log.error }),
-          })),
-
-          // Additional metadata
-          log_count: trace.logs.length,
-          error_count: trace.logs.filter((log) => log.level === "error").length,
-          warning_count: trace.logs.filter((log) => log.level === "warn")
-            .length,
-          has_errors: trace.logs.some((log) => log.level === "error"),
-          user_id: trace.userId,
-          username: trace.username,
-          trace_id: trace.traceId,
-          span_id: trace.spanId,
+      const response = await fetch(batchEndpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      };
+        body: JSON.stringify(batchRequest),
+      });
 
-      await posthog.capture(event);
-      metrics.tracesFlushed++;
-      console.log(
-        `[PostHogTransport] Sent trace for request ${requestId} with ${trace.logs.length} logs`
-      );
-    } catch (err) {
-      metrics.flushErrors++;
-      console.error(
-        `[PostHogTransport] Failed to send trace for request ${requestId}:`,
-        err.message
-      );
-
-      // Re-add to map for retry (with limits)
-      if (trace.retryCount < MAX_RETRIES) {
-        trace.retryCount = (trace.retryCount || 0) + 1;
-        metrics.retryAttempts++;
-        requestTraces.set(requestId, trace);
-        setTimeout(() => {
-          const retryTrace = requestTraces.get(requestId);
-          if (retryTrace) {
-            requestTraces.delete(requestId);
-            flushRequestTrace(requestId, retryTrace);
-          }
-        }, RETRY_DELAY * trace.retryCount);
-      } else {
-        metrics.tracesDropped++;
-        console.error(
-          `[PostHogTransport] Max retries reached for request ${requestId}. Dropping ${trace.logs.length} logs.`
+      if (!response.ok) {
+        throw new Error(
+          `PostHog batch API error: ${response.status} ${response.statusText}`
         );
+      }
+
+      // Success
+      const batchSize = estimateBatchSize(events);
+      metrics.batchesSent++;
+      metrics.totalBatchSizeBytes += batchSize;
+
+      // Count event types
+      events.forEach((event) => {
+        if (event.event === "log") {
+          metrics.logEventsSent++;
+        } else if (event.event === "api_request") {
+          metrics.apiRequestEventsSent++;
+        }
+      });
+
+      console.log(
+        `[PostHogTransport] Sent batch of ${events.length} events (${(
+          batchSize / 1024
+        ).toFixed(2)}KB)`
+      );
+    } catch (error) {
+      metrics.sendErrors++;
+
+      if (retryCount < MAX_RETRIES) {
+        // Exponential backoff
+        const delay = RETRY_DELAY * Math.pow(RETRY_BACKOFF, retryCount);
+
+        console.warn(
+          `[PostHogTransport] Batch send failed, retrying in ${delay}ms (attempt ${
+            retryCount + 1
+          }/${MAX_RETRIES})`,
+          error.message
+        );
+
+        await new Promise((resolve) => setTimeout(resolve, delay));
+
+        metrics.retryAttempts++;
+        return sendBatchToPostHog(events, retryCount + 1);
+      } else {
+        // Max retries exceeded
+        metrics.logsDropped += events.length;
+        console.error(
+          `[PostHogTransport] Max retries exceeded. Dropping ${events.length} events.`,
+          error.message
+        );
+        throw error;
       }
     }
   }
 
-  // Flush all completed requests
-  async function flushCompletedRequests() {
-    if (isFlushing) return;
+  // Flush buffered events to PostHog
+  async function flushEvents() {
+    if (isFlushing || eventBuffer.length === 0) return;
+
     isFlushing = true;
 
     try {
-      const tracesToFlush = [];
-      const now = Date.now();
+      // Extract events from buffer (up to BATCH_SIZE)
+      const eventsToSend = eventBuffer.splice(0, BATCH_SIZE);
 
-      // Find completed requests (older than REQUEST_TIMEOUT or marked complete)
-      for (const [requestId, trace] of requestTraces.entries()) {
-        const isOld = now - trace.lastUpdated > REQUEST_TIMEOUT;
-        if (trace.completed || isOld) {
-          tracesToFlush.push({ requestId, trace });
-          requestTraces.delete(requestId);
-        }
+      if (eventsToSend.length === 0) {
+        return;
       }
 
-      // Process in batches to avoid overwhelming PostHog
-      for (let i = 0; i < tracesToFlush.length; i += MAX_BATCH_SIZE) {
-        const batch = tracesToFlush.slice(i, i + MAX_BATCH_SIZE);
-        await Promise.all(
-          batch.map(({ requestId, trace }) =>
-            flushRequestTrace(requestId, trace)
-          )
+      // Check if batch size exceeds limit
+      const estimatedSize = estimateBatchSize(eventsToSend);
+      const maxSizeBytes = MAX_BATCH_SIZE_MB * 1024 * 1024;
+
+      if (estimatedSize > maxSizeBytes) {
+        // Split into smaller batches
+        console.warn(
+          `[PostHogTransport] Batch size (${(
+            estimatedSize /
+            1024 /
+            1024
+          ).toFixed(2)}MB) exceeds limit. Splitting...`
         );
+
+        const batches = splitIntoBatches(eventsToSend, maxSizeBytes);
+
+        console.log(
+          `[PostHogTransport] Split into ${batches.length} smaller batches`
+        );
+
+        // Send each batch
+        for (const batch of batches) {
+          await sendBatchToPostHog(batch);
+        }
+      } else {
+        // Send as single batch
+        await sendBatchToPostHog(eventsToSend);
       }
-    } catch (err) {
-      console.error(
-        "[PostHogTransport] Error flushing completed requests:",
-        err.message
-      );
+    } catch (error) {
+      console.error("[PostHogTransport] Flush error:", error.message);
     } finally {
       isFlushing = false;
     }
   }
 
-  // Flush all requests (forceful, for shutdown)
-  async function flushAllRequests() {
-    const traces = Array.from(requestTraces.entries());
-    requestTraces.clear();
+  // Flush all remaining events (for shutdown)
+  async function flushAllEvents() {
+    console.info(
+      `[PostHogTransport] Flushing ${eventBuffer.length} remaining events...`
+    );
 
-    for (const [requestId, trace] of traces) {
-      await flushRequestTrace(requestId, trace);
+    while (eventBuffer.length > 0) {
+      await flushEvents();
     }
   }
 
-  // Cleanup stale traces
-  function cleanupStaleTraces() {
-    const now = Date.now();
-    for (const [requestId, trace] of requestTraces.entries()) {
-      if (now - trace.lastUpdated > STALE_TRACE_TIMEOUT) {
-        console.warn(
-          `[PostHogTransport] Removing stale trace for request ${requestId}`
-        );
-        requestTraces.delete(requestId);
-        metrics.tracesDropped++;
-      }
-    }
-  }
-
-  // Start periodic flushing and cleanup
-  flushTimer = setInterval(flushCompletedRequests, FLUSH_INTERVAL);
-  cleanupTimer = setInterval(cleanupStaleTraces, CLEANUP_INTERVAL);
+  // Start periodic flushing
+  flushTimer = setInterval(flushEvents, FLUSH_INTERVAL);
 
   console.info(
     `[PostHogTransport] Initialized for ${serviceName} (instance: ${instanceId})`
+  );
+  console.info(
+    `[PostHogTransport] Using batch API (${BATCH_SIZE} events per batch, ${FLUSH_INTERVAL}ms interval)`
+  );
+  console.info(
+    `[PostHogTransport] Access logs (logType='access_log') will create api_request events only`
   );
 
   return build(
@@ -221,94 +404,25 @@ module.exports = async function postHogTransport(options) {
         try {
           metrics.logsReceived++;
 
-          const requestId = obj.requestId;
+          // Determine which events to create based on log type
+          const createLogEvent_flag = shouldCreateLogEvent(obj);
+          const createApiRequestEvent_flag = shouldCreateApiRequestEvent(obj);
 
-          // DROP logs without requestId
-          if (!requestId) {
-            metrics.logsDropped++;
-            if (metrics.logsDropped % 100 === 0) {
-              console.warn(
-                `[PostHogTransport] Dropped ${metrics.logsDropped} logs without requestId`
-              );
-            }
-            continue;
+          // Create api_request event if needed (for access logs)
+          if (createApiRequestEvent_flag) {
+            const apiEvent = createApiMetricsEvent(obj);
+            eventBuffer.push(apiEvent);
           }
 
-          // Get or create request trace
-          let trace = requestTraces.get(requestId);
-          if (!trace) {
-            trace = {
-              logs: [],
-              startedAt: Date.now(),
-              lastUpdated: Date.now(),
-              completed: false,
-              retryCount: 0,
-            };
-            requestTraces.set(requestId, trace);
-            metrics.tracesCreated++;
+          // Create log event if needed (for non-access logs)
+          if (createLogEvent_flag) {
+            const logEvent = createLogEvent(obj);
+            eventBuffer.push(logEvent);
           }
 
-          // Update trace metadata from log context
-          trace.lastUpdated = Date.now();
-
-          // Extract request-level information from appropriate logs
-          if (obj.component === "HTTP" || obj.method) {
-            // This is an access log - use it for request metadata
-            trace.url = obj.url || obj.path;
-            trace.method = obj.method;
-            trace.statusCode = obj.statusCode;
-            trace.responseTime = obj.responseTime || obj.duration;
-            trace.ip = obj.ip;
-            trace.userAgent = obj.userAgent;
-            trace.timestamp = obj.timestamp || obj.time;
-            trace.completed = true; // HTTP logs usually indicate request completion
-          }
-
-          // Extract user context
-          if (obj.userId) trace.userId = obj.userId;
-          if (obj.username) trace.username = obj.username;
-          if (obj.traceId) trace.traceId = obj.traceId;
-          if (obj.spanId) trace.spanId = obj.spanId;
-
-          // Add the individual log entry
-          const logEntry = {
-            level: obj.level || "info",
-            type: determineLogType(obj),
-            serviceName: obj.serviceName || serviceName,
-            message: obj.msg || obj.message || "",
-            timestamp: obj.timestamp || obj.time || new Date().toISOString(),
-            context: obj.context || obj.additionalContext || {},
-            component: obj.component,
-            duration: obj.duration,
-          };
-
-          // Include error information if present
-          if (obj.err && typeof obj.err === "object") {
-            logEntry.error = {
-              message: obj.err.message,
-              stack: obj.err.stack,
-              code: obj.err.code,
-              type: obj.err.type,
-            };
-          } else if (obj.error && typeof obj.error === "object") {
-            logEntry.error = {
-              message: obj.error.message,
-              stack: obj.error.stack,
-              code: obj.error.code,
-              type: obj.error.type,
-            };
-          }
-
-          trace.logs.push(logEntry);
-
-          // If this is an error log, consider the request completed for faster error reporting
-          if (obj.level === "error") {
-            trace.completed = true;
-          }
-
-          // Immediate flush if we have too many logs for this request
-          if (trace.logs.length >= MAX_LOGS_PER_REQUEST) {
-            trace.completed = true;
+          // Flush if buffer is full
+          if (eventBuffer.length >= BATCH_SIZE) {
+            await flushEvents();
           }
         } catch (err) {
           metrics.parseErrors++;
@@ -322,16 +436,15 @@ module.exports = async function postHogTransport(options) {
     {
       async close() {
         if (flushTimer) clearInterval(flushTimer);
-        if (cleanupTimer) clearInterval(cleanupTimer);
 
         console.info(
-          "[PostHogTransport] Finalizing stream, flushing remaining requests..."
+          "[PostHogTransport] Finalizing stream, flushing remaining events..."
         );
         console.info("[PostHogTransport] Final metrics:", metrics);
 
-        await flushAllRequests();
+        await flushAllEvents();
 
-        console.info("[PostHogTransport] Stream ended, all requests flushed.");
+        console.info("[PostHogTransport] Stream ended, all events flushed.");
       },
     }
   );

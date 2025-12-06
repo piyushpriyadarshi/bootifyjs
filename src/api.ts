@@ -1,5 +1,5 @@
-import fastify, { FastifyInstance } from 'fastify'
-import z, { ZodError, ZodObject } from 'zod'
+import fastify, { FastifyInstance, FastifyServerOptions } from 'fastify'
+import { ZodError, ZodObject } from 'zod'
 import { AppConfig } from './config/AppConfig'
 import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from './constants'
 import { FastifyMiddleware } from './core/decorators'
@@ -13,7 +13,7 @@ import {
 } from './middleware/request-logger.middleware'
 
 export interface BootifyAppOptions {
-  controllers: Constructor[]
+  controllers?: Constructor[]
   port?: number
   hostname?: string
   enableSwagger?: boolean
@@ -22,23 +22,36 @@ export interface BootifyAppOptions {
   globalMiddlewares?: FastifyMiddleware[]
   ignoreTrailingSlash?: boolean
   enableCookie?: boolean
+  enableRequestLogger?: boolean
+  enableContextMiddleware?: boolean
+  enableErrorHandler?: boolean
+  fastifyOptions?: FastifyServerOptions
+  autoStart?: boolean
 }
 
-export async function createBootifyApp(options: BootifyAppOptions) {
-  AppConfig.initialize(options.configSchema ?? z.object({}))
+export async function createBootifyApp(options: BootifyAppOptions = {}) {
+  // Initialize config if provided
+  if (options.configSchema) {
+    AppConfig.initialize(options.configSchema)
+  }
 
   const { logger, startupLogger } = await intitializeLogging()
 
   startupLogger.logStartupBanner()
+
+  // Create Fastify instance with custom options
   const app: FastifyInstance = fastify({
     logger: false,
     ignoreTrailingSlash: options.ignoreTrailingSlash ?? true,
+    ...options.fastifyOptions,
   })
 
-  // Register context middleware FIRST to establish AsyncLocalStorage context
-  startupLogger.logComponentStart('Request Context Middleware')
-  app.addHook('onRequest', createContextMiddleware(options.contextExtractor))
-  startupLogger.logComponentComplete('Request Context Middleware')
+  // Register context middleware FIRST (if enabled)
+  if (options.enableContextMiddleware !== false) {
+    startupLogger.logComponentStart('Request Context Middleware')
+    app.addHook('onRequest', createContextMiddleware(options.contextExtractor))
+    startupLogger.logComponentComplete('Request Context Middleware')
+  }
 
   // Register cookie parsing if enabled
 
@@ -66,32 +79,35 @@ export async function createBootifyApp(options: BootifyAppOptions) {
     startupLogger.logComponentComplete('Global Middlewares')
   }
 
-  // 2. Request Logger Hooks
-  // These log the start and end of the request.
-  startupLogger.logComponentStart('Attaching Request Logger')
-  app.addHook('onRequest', requestLoggerOnRequest)
-  app.addHook('onResponse', createRequestLoggerOnResponse(logger))
-  startupLogger.logComponentComplete('Attaching Request Logger')
+  // 2. Request Logger Hooks (if enabled)
+  if (options.enableRequestLogger !== false) {
+    startupLogger.logComponentStart('Attaching Request Logger')
+    app.addHook('onRequest', requestLoggerOnRequest)
+    app.addHook('onResponse', createRequestLoggerOnResponse(logger))
+    startupLogger.logComponentComplete('Attaching Request Logger')
+  }
 
-  startupLogger.logComponentStart('Attaching Global ErrorHandler')
+  // 3. Global Error Handler (if enabled)
+  if (options.enableErrorHandler !== false) {
+    startupLogger.logComponentStart('Attaching Global ErrorHandler')
 
-  app.setErrorHandler((error, request, reply) => {
-    if (error instanceof ZodError) {
-      reply.status(400).send({
-        statusCode: 400,
-        error: 'Bad Request',
-        message: 'Validation failed',
-        details: error.issues,
-      })
-    } else if ((error as any).statusCode) {
-      reply.send(error)
-    } else {
-      // app.log.error(error)
-      logger.error('Internal Server Error', error)
-      reply.status(500).send({ message: 'Internal Server Error' })
-    }
-  })
-  startupLogger.logComponentComplete('Attaching Global ErrorHandler')
+    app.setErrorHandler((error, request, reply) => {
+      if (error instanceof ZodError) {
+        reply.status(400).send({
+          statusCode: 400,
+          error: 'Bad Request',
+          message: 'Validation failed',
+          details: error.issues,
+        })
+      } else if ((error as any).statusCode) {
+        reply.send(error)
+      } else {
+        logger.error('Internal Server Error', error)
+        reply.status(500).send({ message: 'Internal Server Error' })
+      }
+    })
+    startupLogger.logComponentComplete('Attaching Global ErrorHandler')
+  }
 
 
 
@@ -119,11 +135,15 @@ export async function createBootifyApp(options: BootifyAppOptions) {
     startupLogger.logComponentComplete(' Swagger COnfiguiration Done')
   }
 
-  startupLogger.logComponentStart('Registering Controllers')
-  registerControllers(app, options.controllers)
-  startupLogger.logComponentComplete('Registering Controllers')
+  // Register controllers (if provided)
+  if (options.controllers && options.controllers.length > 0) {
+    startupLogger.logComponentStart('Registering Controllers')
+    registerControllers(app, options.controllers)
+    startupLogger.logComponentComplete('Registering Controllers')
+  }
 
   startupLogger.logStartupComplete()
+
   const start = async () => {
     try {
       const actualPort = options.port ?? DEFAULT_SERVER_PORT
@@ -135,5 +155,11 @@ export async function createBootifyApp(options: BootifyAppOptions) {
       process.exit(1)
     }
   }
-  return { app, start }
+
+  // Auto-start if requested
+  if (options.autoStart) {
+    await start()
+  }
+
+  return { app, start, logger, startupLogger }
 }

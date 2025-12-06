@@ -1,9 +1,9 @@
+import { FastifyReply, FastifyRequest } from 'fastify'
 import 'reflect-metadata'
-import { z, ZodSchema } from 'zod'
-import { FastifyRequest, FastifyReply } from 'fastify'
-import { ComponentOptions, container, Scope } from './di-container'
-import { registeredComponents } from './component-registry'
+import { ZodSchema } from 'zod'
 import { FRAMEWORK_METADATA_KEYS } from '../constants'
+import { registeredComponents } from './component-registry'
+import { ComponentOptions, container, Scope } from './di-container'
 
 // --- Metadata Keys ---
 export const METADATA_KEYS = {
@@ -14,6 +14,7 @@ export const METADATA_KEYS = {
   middleware: FRAMEWORK_METADATA_KEYS.MIDDLEWARE,
   autowiredProperties: FRAMEWORK_METADATA_KEYS.AUTOWIRED_PROPERTIES,
   autowiredParams: FRAMEWORK_METADATA_KEYS.AUTOWIRED_PARAMS,
+  swaggerMetadata: 'swagger:metadata',
 }
 
 export type FastifyMiddleware = (
@@ -60,27 +61,27 @@ export const Repository = (options: ComponentOptions = {}): ClassDecorator => Co
 
 export const Controller =
   (prefix: string = ''): ClassDecorator =>
-  (target: any) => {
-    Reflect.defineMetadata(METADATA_KEYS.controllerPrefix, prefix, target)
-    container.register(target, { useClass: target, scope: Scope.SINGLETON as any })
-  }
+    (target: any) => {
+      Reflect.defineMetadata(METADATA_KEYS.controllerPrefix, prefix, target)
+      container.register(target, { useClass: target, scope: Scope.SINGLETON as any })
+    }
 
 // --- Method Decorators ---
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS'
 
 const createRouteDecorator =
   (method: HttpMethod) =>
-  (path: string = '/'): MethodDecorator => {
-    return (target: any, propertyKey: string | symbol) => {
-      const routes = Reflect.getMetadata(METADATA_KEYS.routes, target.constructor) || []
-      routes.push({
-        method,
-        path,
-        handlerName: propertyKey,
-      })
-      Reflect.defineMetadata(METADATA_KEYS.routes, routes, target.constructor)
+    (path: string = '/'): MethodDecorator => {
+      return (target: any, propertyKey: string | symbol) => {
+        const routes = Reflect.getMetadata(METADATA_KEYS.routes, target.constructor) || []
+        routes.push({
+          method,
+          path,
+          handlerName: propertyKey,
+        })
+        Reflect.defineMetadata(METADATA_KEYS.routes, routes, target.constructor)
+      }
     }
-  }
 
 export const Get = createRouteDecorator('GET')
 export const Post = createRouteDecorator('POST')
@@ -91,11 +92,11 @@ export const Patch = createRouteDecorator('PATCH')
 // --- Parameter Decorators ---
 const createParamDecorator =
   (type: string, name?: string) =>
-  (target: any, propertyKey: string | symbol, parameterIndex: number) => {
-    const params = Reflect.getMetadata(METADATA_KEYS.paramTypes, target, propertyKey) || []
-    params[parameterIndex] = { type, name }
-    Reflect.defineMetadata(METADATA_KEYS.paramTypes, params, target, propertyKey)
-  }
+    (target: any, propertyKey: string | symbol, parameterIndex: number) => {
+      const params = Reflect.getMetadata(METADATA_KEYS.paramTypes, target, propertyKey) || []
+      params[parameterIndex] = { type, name }
+      Reflect.defineMetadata(METADATA_KEYS.paramTypes, params, target, propertyKey)
+    }
 
 export const Body = () => createParamDecorator('body')
 export const Query = (name?: string) => createParamDecorator('query', name)
@@ -124,6 +125,39 @@ const Validate = (schema: ValidationDecoratorOptions): MethodDecorator => {
 }
 
 export const Schema = Validate
+
+// --- Swagger Documentation Decorators ---
+
+export interface SwaggerOptions {
+  summary?: string
+  description?: string
+  tags?: string[]
+  deprecated?: boolean
+  operationId?: string
+  security?: Array<Record<string, string[]>>
+}
+
+/**
+ * Decorator to add Swagger/OpenAPI documentation metadata to a route.
+ * This metadata will be merged with the schema generated from @Schema decorator.
+ * 
+ * @example
+ * @Get('/users/:id')
+ * @Swagger({
+ *   summary: 'Get user by ID',
+ *   description: 'Retrieves a single user by their unique identifier',
+ *   tags: ['Users'],
+ *   deprecated: false
+ * })
+ * getUserById(@Param('id') id: string) {
+ *   // ...
+ * }
+ */
+export const Swagger = (options: SwaggerOptions): MethodDecorator => {
+  return (target: any, propertyKey: string | symbol) => {
+    Reflect.defineMetadata(METADATA_KEYS.swaggerMetadata, options, target, propertyKey)
+  }
+}
 
 export const UseMiddleware = (
   ...middlewares: FastifyMiddleware[]
@@ -221,8 +255,7 @@ export const Autowired = (token?: any): any => {
     const tokenToInject = token || propertyType
     if (!tokenToInject) {
       throw new Error(
-        `[DI] Could not resolve type for property '${String(propertyKey)}' on class '${
-          target.constructor.name
+        `[DI] Could not resolve type for property '${String(propertyKey)}' on class '${target.constructor.name
         }'.`
       )
     }
