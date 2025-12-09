@@ -43,7 +43,7 @@ export class AppConfig<T extends ZodRawShape> {
 
   private constructor(userSchema?: ZodObject<T>) {
     // Merge framework and user schemas
-    this.mergedSchema = FrameworkConfigSchema.merge(userSchema || z.object({}))
+    this.mergedSchema = FrameworkConfigSchema.merge(userSchema || z.object({})).passthrough()
 
     // Validate and load configuration
     this.config = this.validateConfig()
