@@ -1,7 +1,7 @@
 import { AnyZodObject, z, ZodObject, ZodRawShape } from 'zod'
 
 // Framework-level configuration schema
-let FrameworkConfigSchema = z.object({
+const BaseFrameworkConfigSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   SERVER_PORT: z.coerce.number().default(4000),
   SERVER_HOST: z.string().default('localhost'),
@@ -32,7 +32,7 @@ const LoggingConfigSchema = z.object({
   CLICKHOUSE_DB: z.string().default('default'),
 })
 
-FrameworkConfigSchema = FrameworkConfigSchema.merge(LoggingConfigSchema)
+const FrameworkConfigSchema = BaseFrameworkConfigSchema.merge(LoggingConfigSchema).passthrough()
 
 type FrameworkConfig = z.infer<typeof FrameworkConfigSchema>
 

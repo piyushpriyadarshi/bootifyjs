@@ -12,3 +12,14 @@ export interface ICacheStore {
   set(key: string, value: any, ttlInSeconds?: number): Promise<void>
   del(key: string): Promise<void>
 }
+
+// Type guard for Bun bundler compatibility (ensures interface is not tree-shaken)
+export function isCacheStore(obj: unknown): obj is ICacheStore {
+  return (
+    typeof obj === 'object' &&
+    obj !== null &&
+    'get' in obj &&
+    'set' in obj &&
+    'del' in obj
+  )
+}

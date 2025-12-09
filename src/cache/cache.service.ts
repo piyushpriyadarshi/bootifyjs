@@ -1,10 +1,11 @@
 // import { Service, Autowired } from '../decorators'
 import { Autowired, Service } from '../core/decorators'
-import { ICacheStore, CACHE_STORE_TOKEN } from './cache.types'
+import type { ICacheStore } from './cache.types'
+import { CACHE_STORE_TOKEN } from './cache.types'
 
 @Service() // Eagerly load to ensure it's ready
 export class CacheService {
-  constructor(@Autowired(CACHE_STORE_TOKEN) private readonly store: ICacheStore) {}
+  constructor(@Autowired(CACHE_STORE_TOKEN) private readonly store: ICacheStore) { }
 
   public get<T>(key: string): Promise<T | undefined> {
     return this.store.get(key)

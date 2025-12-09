@@ -19,6 +19,8 @@ import "../cache/stores/redis-cache.store";
 import { createContextMiddleware } from "../middleware";
 // Import scheduled tasks service to register it with DI
 import "./services/scheduled-tasks.service";
+// Import event handlers to register them with DI (must be after events to avoid circular deps)
+import "./events/TodoEventHandler";
 
 // --- Application Startup ---
 
