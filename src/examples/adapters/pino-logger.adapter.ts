@@ -1,42 +1,47 @@
 /**
- * Pino Adapter - Use Pino as the logging backend
+ * Example: Pino Logger Adapter with Request Context
  * 
- * This adapter wraps Pino to implement the ILogger interface,
- * allowing users to leverage Pino's performance while using
- * the BootifyJS logging API.
+ * This shows how users can create their own logger adapter
+ * that implements the ILogger interface from BootifyJS.
+ * 
+ * This adapter automatically includes request context (requestId, userId, etc.)
+ * in all log entries using Pino's mixin feature.
+ * 
+ * Users must install pino themselves: npm install pino pino-pretty
  */
 import pino from 'pino'
-import { ILogger, LogContext, LogLevel } from '../interfaces'
+import { requestContextStore } from '../../core/request-context.service'
+import { ILogger, LogContext } from '../../logging'
 
-export interface PinoAdapterOptions {
-    level?: LogLevel
+export interface PinoLoggerOptions {
+    level?: string
     serviceName?: string
     prettyPrint?: boolean
-    transports?: pino.TransportTargetOptions[]
-    pinoOptions?: pino.LoggerOptions
 }
 
-export class PinoAdapter implements ILogger {
+export class PinoLoggerAdapter implements ILogger {
     private logger: pino.Logger
 
-    constructor(options: PinoAdapterOptions = {}) {
+    constructor(options: PinoLoggerOptions = {}) {
         const pinoOptions: pino.LoggerOptions = {
             level: options.level ?? 'info',
             messageKey: 'message',
             base: {
-                service: options.serviceName ?? 'bootify-app',
+                service: options.serviceName ?? 'app',
                 pid: process.pid,
             },
             timestamp: () => `,"timestamp":"${new Date().toISOString()}"`,
-            ...options.pinoOptions,
+            // Mixin automatically adds request context to every log entry
+            mixin() {
+                const store = requestContextStore.getStore()
+                if (!store) {
+                    return {}
+                }
+                return Object.fromEntries(store.entries())
+            },
         }
 
-        if (options.transports && options.transports.length > 0) {
-            this.logger = pino({
-                ...pinoOptions,
-                transport: { targets: options.transports },
-            })
-        } else if (options.prettyPrint) {
+        if (options.prettyPrint) {
             this.logger = pino({
                 ...pinoOptions,
                 transport: {
@@ -78,16 +83,8 @@ export class PinoAdapter implements ILogger {
     }
 
     child(bindings: LogContext): ILogger {
-        const childPino = this.logger.child(bindings)
-        const adapter = new PinoAdapter()
-            ; (adapter as any).logger = childPino
-        return adapter
-    }
-
-    /**
-     * Get the underlying Pino logger for advanced usage
-     */
-    getPinoInstance(): pino.Logger {
-        return this.logger
+        const childLogger = new PinoLoggerAdapter()
+            ; (childLogger as any).logger = this.logger.child(bindings)
+        return childLogger
     }
 }

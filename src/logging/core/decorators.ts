@@ -1,60 +1,12 @@
-import { container, requestContextStore } from '../../core'
-import { Logger } from './logger'
-
-// // --- @Log Decorator ---
-
-// export interface LogOptions {
-//   level?: 'debug' | 'info' | 'warn' | 'error'
-//   logArgs?: boolean
-//   logResult?: boolean
-//   logDuration?: boolean
-//   message?: string
-// }
-
-// /**
-//  * A method decorator that provides detailed logging for a method's execution,
-//  * including start, completion, duration, and errors.
-//  */
-// export function Log(options: LogOptions = {}): MethodDecorator {
-//   return (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) => {
-//     const originalMethod = descriptor.value
-//     const className = target.constructor.name
-//     const methodName = String(propertyKey)
-
-//     descriptor.value = async function (...args: any[]) {
-//       // Resolve services from the DI container at runtime
-//       const logger = container.resolve(LoggerService)
-//       const startTime = Date.now()
-
-//       const logContext = { component: className, method: methodName }
-//       const message = options.message || `Executing ${methodName}`
-
-//       try {
-//         if (options.logArgs) {
-//           logger.debug(`${message} - started`, { ...logContext, args })
-//         } else {
-//           logger.debug(`${message} - started`, logContext)
-//         }
-
-//         const result = await originalMethod.apply(this, args)
-//         const duration = Date.now() - startTime
-
-//         const successContext = { ...logContext, durationMs: duration }
-//         if (options.logResult) {
-//           ;(successContext as any).result = result
-//         }
-
-//         logger.debug(`${message} - completed`, successContext)
-
-//         return result
-//       } catch (error) {
-//         const duration = Date.now() - startTime
-//         logger.error(`${message} - failed`, error as Error, { ...logContext, durationMs: duration })
-//         throw error
-//       }
-//     }
-//   }
-// }
+/**
+ * Logging Decorators
+ * 
+ * These decorators use the ILogger interface, so they work with
+ * any logger implementation the user provides.
+ */
+import { requestContextStore } from '../../core'
+import { ILogger } from './interfaces'
+import { getLogger, isLoggerInitialized } from './logger-builder'
 
 // --- @Audit Decorator ---
 
@@ -75,10 +27,13 @@ export function Audit(options: AuditOptions): MethodDecorator {
     descriptor.value = async function (...args: any[]) {
       const result = await originalMethod.apply(this, args)
 
-      // Resolve services from the DI container
-      const logger = container.resolve<Logger>(Logger)
-      //   const contextService = container.resolve(RequestContextService)
-      //   const requestContext = contextService.getStoreObject() // Get context as a plain object
+      // Get logger if initialized
+      if (!isLoggerInitialized()) {
+        console.warn('[Audit] Logger not initialized, skipping audit log')
+        return result
+      }
+
+      const logger = getLogger()
       const store = requestContextStore.getStore() || new Map()
 
       const resourceId = options.resourceIdPath
@@ -86,33 +41,49 @@ export function Audit(options: AuditOptions): MethodDecorator {
         : undefined
 
       const auditPayload = {
+        logType: 'audit',
         action: options.action,
         resource: options.resource,
         resourceId,
-        actor: {
-          ...Object.fromEntries(store.entries()),
-        },
+        actor: Object.fromEntries(store.entries()),
       }
-      logger.audit(auditPayload)
+
+      logger.info('Audit Log', auditPayload)
 
       return result
     }
   }
 }
 
-// --- @Logger Class Decorator ---
+// --- @Loggable Class Decorator ---
 
 /**
- * A class decorator that injects a child 'logger' instance into the class prototype,
- * automatically namespaced with the class name.
+ * A class decorator that injects a 'logger' property into the class prototype.
+ * The logger is automatically namespaced with the class name.
+ * 
+ * @example
+ * @Loggable()
+ * class MyService {
+ *   private logger!: ILogger
+ *   
+ *   doSomething() {
+ *     this.logger.info('Doing something')
+ *   }
+ * }
  */
 export function Loggable(): ClassDecorator {
   return function (target: any) {
     Object.defineProperty(target.prototype, 'logger', {
       get: function () {
         if (!this._logger) {
-          const loggerService = container.resolve<Logger>(Logger)
-          this._logger = loggerService.child({ component: target.name })
+          if (!isLoggerInitialized()) {
+            // Return a no-op logger if not initialized
+            this._logger = createNoOpLogger()
+          } else {
+            const logger = getLogger()
+            // Create a child logger with component name if supported
+            this._logger = logger.child({ component: target.name })
+          }
         }
         return this._logger
       },
@@ -130,7 +101,6 @@ function extractValueFromPath(path: string, context: { args: any[]; result: any 
 
   for (const part of parts) {
     if (current === null || current === undefined) return undefined
-    // Special handling for array indices like 'args.0'
     if (Array.isArray(current) && !isNaN(parseInt(part, 10))) {
       current = current[parseInt(part, 10)]
     } else {
@@ -138,4 +108,17 @@ function extractValueFromPath(path: string, context: { args: any[]; result: any 
     }
   }
   return current
+}
+
+function createNoOpLogger(): ILogger {
+  const noop = () => { }
+  return {
+    trace: noop,
+    debug: noop,
+    info: noop,
+    warn: noop,
+    error: noop,
+    fatal: noop,
+    child: () => createNoOpLogger(),
+  }
 }

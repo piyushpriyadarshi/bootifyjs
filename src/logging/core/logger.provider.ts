@@ -1,9 +1,24 @@
+/**
+ * @deprecated This file is kept for backward compatibility only.
+ * Use createLogger() builder and ILogger interface instead.
+ * 
+ * New code should use:
+ * ```typescript
+ * import { createLogger, ILogger } from 'bootifyjs/logging'
+ * 
+ * createLogger()
+ *   .use(myLoggerAdapter)
+ *   .build()
+ * ```
+ */
 import path from "path";
 import pino from "pino";
 import { AppConfig } from "../../config/AppConfig";
 import { container, requestContextStore } from "../../core";
 
-// 1. Define a unique DI token for our logger instance
+/**
+ * @deprecated Use LOGGER_TOKEN from logger-builder.ts instead
+ */
 export const LOGGER_TOKEN = Symbol.for("Logger");
 
 // 2. The factory function

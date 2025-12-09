@@ -1,7 +1,27 @@
+/**
+ * @deprecated Use ILogger interface and createLogger() builder instead.
+ * This class is kept for backward compatibility only.
+ * 
+ * New code should use:
+ * ```typescript
+ * import { createLogger, getLogger, ILogger } from 'bootifyjs/logging'
+ * 
+ * // Configure logger
+ * createLogger()
+ *   .use(myLoggerAdapter)
+ *   .build()
+ * 
+ * // Get logger anywhere
+ * const logger = getLogger()
+ * ```
+ */
 import pino from 'pino'
-import { LOGGER_TOKEN } from './logger.provider'
 import { Autowired, Service } from '../../core'
+import { LOGGER_TOKEN } from './logger.provider'
 
+/**
+ * @deprecated Use ILogger interface instead
+ */
 @Service()
 export class Logger {
   @Autowired(LOGGER_TOKEN)

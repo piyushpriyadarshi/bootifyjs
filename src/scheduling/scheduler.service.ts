@@ -4,6 +4,7 @@
 import { registeredComponents } from '../core/component-registry'
 import { Service } from '../core/decorators'
 import { container } from '../core/di-container'
+import { getLogger, ILogger } from '../logging'
 import { SCHEDULED_METADATA_KEY } from './scheduled.decorator'
 import { JobStatus, ScheduledJobMetadata, SchedulerStats } from './scheduler.types'
 
@@ -23,12 +24,26 @@ export class SchedulerService {
     private isStarted = false
     private nodeCron: any = null
 
+    private get logger(): ILogger {
+        try {
+            return getLogger()
+        } catch {
+            // Fallback to console if logger not initialized
+            return {
+                info: (msg: string, ctx?: any) => console.log(`[Scheduler] ${msg}`, ctx || ''),
+                warn: (msg: string, ctx?: any) => console.warn(`[Scheduler] ${msg}`, ctx || ''),
+                error: (msg: string, err?: Error, ctx?: any) => console.error(`[Scheduler] ${msg}`, err, ctx || ''),
+                debug: (msg: string, ctx?: any) => console.debug(`[Scheduler] ${msg}`, ctx || ''),
+            } as ILogger
+        }
+    }
+
     /**
      * Initialize and start all scheduled jobs
      */
     async start(): Promise<void> {
         if (this.isStarted) {
-            console.warn('[Scheduler] Already started')
+            this.logger.warn('Scheduler already started')
             return
         }
 
@@ -36,20 +51,19 @@ export class SchedulerService {
         try {
             this.nodeCron = await import('node-cron')
         } catch {
-            console.warn('[Scheduler] node-cron not installed. Cron expressions will not work.')
-            console.warn('[Scheduler] Install with: npm install node-cron')
+            this.logger.warn('node-cron not installed. Cron expressions will not work. Install with: npm install node-cron')
         }
 
         // Discover all scheduled jobs from registered components
         this.discoverJobs()
 
         // Start all jobs
-        Array.from(this.jobs.entries()).forEach(([name, job]) => {
+        Array.from(this.jobs.entries()).forEach(([_name, job]) => {
             this.startJob(job)
         })
 
         this.isStarted = true
-        console.log(`[Scheduler] Started ${this.jobs.size} scheduled job(s)`)
+        this.logger.info('Scheduler started', { totalJobs: this.jobs.size })
     }
 
     /**
@@ -58,11 +72,11 @@ export class SchedulerService {
     async stop(): Promise<void> {
         if (!this.isStarted) return
 
-        console.log('[Scheduler] Stopping all jobs...')
+        this.logger.info('Stopping all scheduled jobs...')
 
         const stopPromises: Promise<void>[] = []
 
-        Array.from(this.jobs.entries()).forEach(([name, job]) => {
+        Array.from(this.jobs.entries()).forEach(([_name, job]) => {
             // Stop timers
             if (job.timer) {
                 clearInterval(job.timer)
@@ -97,7 +111,7 @@ export class SchedulerService {
         await Promise.all(stopPromises)
         this.jobs.clear()
         this.isStarted = false
-        console.log('[Scheduler] All jobs stopped')
+        this.logger.info('All scheduled jobs stopped')
     }
 
     /**
@@ -122,7 +136,7 @@ export class SchedulerService {
         job.metadata.options.enabled = true
         job.status.status = 'idle'
         this.startJob(job)
-        console.log(`[Scheduler] Job '${jobName}' enabled`)
+        this.logger.info('Job enabled', { jobName })
     }
 
     /**
@@ -143,7 +157,7 @@ export class SchedulerService {
         if (job.cronJob?.stop) {
             job.cronJob.stop()
         }
-        console.log(`[Scheduler] Job '${jobName}' disabled`)
+        this.logger.info('Job disabled', { jobName })
     }
 
     /**
@@ -181,7 +195,7 @@ export class SchedulerService {
             try {
                 instance = container.resolve(componentClass)
             } catch (error) {
-                console.error(`[Scheduler] Failed to resolve ${componentClass.name}:`, error)
+                this.logger.error(`Failed to resolve component`, error as Error, { component: componentClass.name })
                 continue
             }
 
@@ -190,7 +204,7 @@ export class SchedulerService {
                 const jobName = `${componentClass.name}.${metadata.options.name}`
 
                 if (this.jobs.has(jobName)) {
-                    console.warn(`[Scheduler] Duplicate job name: ${jobName}`)
+                    this.logger.warn('Duplicate job name', { jobName })
                     continue
                 }
 
@@ -207,7 +221,7 @@ export class SchedulerService {
                     durations: [],
                 })
 
-                console.log(`[Scheduler] Registered job: ${jobName}`)
+                this.logger.debug('Registered scheduled job', { jobName })
             }
         }
     }
@@ -229,7 +243,7 @@ export class SchedulerService {
         // Setup cron schedule
         if (options.cron) {
             if (!this.nodeCron) {
-                console.error(`[Scheduler] Cannot start cron job '${job.status.name}': node-cron not installed`)
+                this.logger.error('Cannot start cron job: node-cron not installed', undefined, { jobName: job.status.name })
                 return
             }
 
@@ -246,7 +260,7 @@ export class SchedulerService {
                 // Calculate next run
                 job.status.nextRun = this.getNextCronRun(options.cron)
             } catch (error: any) {
-                console.error(`[Scheduler] Invalid cron expression for '${job.status.name}':`, error.message)
+                this.logger.error('Invalid cron expression', error, { jobName: job.status.name })
                 job.status.status = 'error'
                 job.status.lastError = error.message
             }
@@ -283,7 +297,7 @@ export class SchedulerService {
 
         // Prevent overlap if configured
         if (options.preventOverlap && job.isRunning) {
-            console.log(`[Scheduler] Skipping '${job.status.name}' - previous execution still running`)
+            this.logger.debug('Skipping job - previous execution still running', { jobName: job.status.name })
             return
         }
 
@@ -319,7 +333,11 @@ export class SchedulerService {
 
                 break // Exit retry loop on success
             } catch (error: any) {
-                console.error(`[Scheduler] Error in '${job.status.name}' (attempt ${attempt}/${maxAttempts}):`, error.message)
+                this.logger.error('Job execution failed', error, {
+                    jobName: job.status.name,
+                    attempt,
+                    maxAttempts
+                })
 
                 if (attempt >= maxAttempts) {
                     job.status.errorCount++

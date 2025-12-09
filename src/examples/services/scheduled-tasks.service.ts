@@ -4,6 +4,7 @@
  * Demonstrates @Scheduled decorator usage for background jobs.
  */
 import { Service } from '../../core/decorators'
+import { getLogger } from '../../logging'
 import { Scheduled } from '../../scheduling'
 
 @Service()
@@ -19,7 +20,13 @@ export class ScheduledTasksService {
         this.healthCheckCount++
         const memUsage = process.memoryUsage()
         const heapMB = (memUsage.heapUsed / 1024 / 1024).toFixed(2)
-        console.log(`[HealthCheck #${this.healthCheckCount}] Memory: ${heapMB}MB, Uptime: ${process.uptime().toFixed(0)}s`)
+
+        const logger = getLogger()
+        logger.info('Health check completed', {
+            checkNumber: this.healthCheckCount,
+            memoryMB: heapMB,
+            uptimeSeconds: Math.floor(process.uptime()),
+        })
     }
 
     /**
@@ -32,10 +39,14 @@ export class ScheduledTasksService {
     })
     async cleanupExpiredData() {
         this.cleanupCount++
-        console.log(`[Cleanup #${this.cleanupCount}] Running expired data cleanup...`)
+        const logger = getLogger()
+
+        logger.info('Starting cleanup task', { cleanupNumber: this.cleanupCount })
+
         // Simulate cleanup work
         await new Promise(resolve => setTimeout(resolve, 1000))
-        console.log(`[Cleanup #${this.cleanupCount}] Cleanup complete`)
+
+        logger.info('Cleanup task completed', { cleanupNumber: this.cleanupCount })
     }
 
     /**
@@ -43,6 +54,10 @@ export class ScheduledTasksService {
      */
     @Scheduled({ interval: 60000, name: 'stats-reporter' })
     async reportStats() {
-        console.log(`[Stats] Health checks: ${this.healthCheckCount}, Cleanups: ${this.cleanupCount}`)
+        const logger = getLogger()
+        logger.info('Scheduled tasks stats', {
+            healthChecks: this.healthCheckCount,
+            cleanups: this.cleanupCount,
+        })
     }
 }

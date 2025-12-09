@@ -5,18 +5,24 @@ import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from './constants'
 import { FastifyMiddleware } from './core/decorators'
 import { Constructor, container } from './core/di-container'
 import { registerControllers } from './core/router'
-import { initializeStreamingLogging } from './logging'
-import { Logger } from './logging/core/logger'
-import { StreamingStartupLogger } from './logging/core/streaming-startup-logger'
+import {
+    createLogger,
+    ILogger,
+    LoggerBuilder,
+    LogLevel,
+    RequestContextProvider,
+    StreamingStartupLogger
+} from './logging'
 import { SchedulerService } from './scheduling/scheduler.service'
 
 export type PluginRegistrationFn = (app: FastifyInstance) => Promise<void> | void
 export type ErrorHandlerFn = (error: Error, request: FastifyRequest, reply: FastifyReply) => Promise<void> | void
 export type LifecycleHookFn = (app: FastifyInstance) => Promise<void> | void
+export type LoggerConfigFn = (builder: LoggerBuilder) => LoggerBuilder
 
 export class BootifyApp {
     private app!: FastifyInstance
-    private logger!: Logger
+    private logger!: ILogger
     private startupLogger!: StreamingStartupLogger
     private scheduler?: SchedulerService
     private port: number = DEFAULT_SERVER_PORT
@@ -27,6 +33,8 @@ export class BootifyApp {
     private afterStartHooks: LifecycleHookFn[] = []
     private customErrorHandler?: ErrorHandlerFn
     private enableScheduler: boolean = true
+    private loggerConfigFn?: LoggerConfigFn
+    private serviceName: string = 'bootify-app'
     private fastifyOptions: FastifyServerOptions = {
         logger: false,
         ignoreTrailingSlash: true,
@@ -44,6 +52,14 @@ export class BootifyApp {
 
     setHostname(hostname: string): this {
         this.hostname = hostname
+        return this
+    }
+
+    /**
+     * Set the service/application name (used in logs)
+     */
+    setServiceName(name: string): this {
+        this.serviceName = name
         return this
     }
 
@@ -94,19 +110,52 @@ export class BootifyApp {
         return this
     }
 
+    /**
+     * Configure the logger using the builder pattern
+     * 
+     * @example
+     * createBootify()
+     *   .useLogger(builder => builder
+     *     .setLevel('debug')
+     *     .addTransport(new MyCustomTransport())
+     *   )
+     */
+    useLogger(configFn: LoggerConfigFn): this {
+        this.loggerConfigFn = configFn
+        return this
+    }
+
+    private initializeLogger(): ILogger {
+        let builder = createLogger()
+            .setServiceName(this.serviceName)
+            .setLevel((process.env.LOG_LEVEL as LogLevel) || 'info')
+            .addContextProvider(new RequestContextProvider())
+            .setBaseContext({
+                environment: process.env.NODE_ENV || 'development',
+            })
+
+        // Apply user customizations
+        if (this.loggerConfigFn) {
+            builder = this.loggerConfigFn(builder)
+        }
+
+        return builder.build()
+    }
 
     async build(): Promise<{
         app: FastifyInstance
         start: () => Promise<void>
-        logger: Logger
+        logger: ILogger
         startupLogger: StreamingStartupLogger
         scheduler?: SchedulerService
     }> {
-        const { logger, startupLogger } = await initializeStreamingLogging()
-        this.logger = logger
-        this.startupLogger = startupLogger
+        // Initialize the new logging system
+        this.logger = this.initializeLogger()
 
-        startupLogger.logStartupBanner()
+        // Initialize startup logger (still uses the streaming one for nice output)
+        this.startupLogger = container.resolve<StreamingStartupLogger>(StreamingStartupLogger)
+
+        this.startupLogger.logStartupBanner()
 
         this.app = fastify(this.fastifyOptions)
 
@@ -115,17 +164,17 @@ export class BootifyApp {
         }
 
         if (this.controllers.length > 0) {
-            startupLogger.logPhaseStart('Registering Controllers')
-            startupLogger.logComponentStart('Controllers', `${this.controllers.length} found`)
+            this.startupLogger.logPhaseStart('Registering Controllers')
+            this.startupLogger.logComponentStart('Controllers', `${this.controllers.length} found`)
             registerControllers(this.app, this.controllers)
-            startupLogger.logComponentComplete()
+            this.startupLogger.logComponentComplete()
         }
 
         if (this.customErrorHandler) {
             this.app.setErrorHandler(this.customErrorHandler)
         }
 
-        startupLogger.logStartupComplete()
+        this.startupLogger.logStartupComplete()
 
         if (this.enableScheduler) {
             this.scheduler = container.resolve(SchedulerService)
@@ -138,13 +187,20 @@ export class BootifyApp {
                 }
 
                 if (this.enableScheduler && this.scheduler) {
-                    startupLogger.logComponentStart('Scheduler', 'Starting scheduled jobs')
+                    this.startupLogger.logComponentStart('Scheduler', 'Starting scheduled jobs')
                     await this.scheduler.start()
-                    startupLogger.logComponentComplete()
+                    this.startupLogger.logComponentComplete()
                 }
 
                 await this.app.listen({ port: this.port, host: this.hostname })
-                startupLogger.logStartupSummary(this.port, this.hostname)
+                this.startupLogger.logStartupSummary(this.port, this.hostname)
+
+                // Log with the new logger
+                this.logger.info('Application started successfully', {
+                    port: this.port,
+                    host: this.hostname,
+                    environment: process.env.NODE_ENV,
+                })
 
                 for (const hook of this.afterStartHooks) {
                     await hook(this.app)
@@ -152,7 +208,7 @@ export class BootifyApp {
 
                 this.setupGracefulShutdown()
             } catch (err) {
-                this.app.log.error(err)
+                this.logger.error('Failed to start application', err as Error)
                 process.exit(1)
             }
         }
@@ -173,14 +229,14 @@ export class BootifyApp {
 
     private setupGracefulShutdown(): void {
         const shutdown = async (signal: string) => {
-            console.log(`\n[BootifyApp] Received ${signal}, shutting down gracefully...`)
+            this.logger.info(`Received ${signal}, shutting down gracefully...`)
 
             if (this.scheduler) {
                 await this.scheduler.stop()
             }
 
             await this.app.close()
-            console.log('[BootifyApp] Shutdown complete')
+            this.logger.info('Shutdown complete')
             process.exit(0)
         }
 

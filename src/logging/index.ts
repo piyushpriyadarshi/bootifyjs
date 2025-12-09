@@ -2,12 +2,13 @@
  * BootifyJS Logging Module
  * 
  * A flexible, extensible logging system using Builder and Strategy patterns.
+ * The core module has NO external logging library dependencies.
+ * Users can provide their own ILogger implementation.
  * 
- * Quick Start:
+ * Quick Start (using built-in BaseLogger):
  * ```typescript
- * import { createLogger, RequestContextProvider } from 'bootifyjs/logging'
+ * import { createLogger } from 'bootifyjs/logging'
  * 
- * // Simple usage
  * const logger = createLogger()
  *   .setLevel('debug')
  *   .setServiceName('my-api')
@@ -16,7 +17,21 @@
  * logger.info('Hello world')
  * ```
  * 
- * Custom Transport:
+ * Using a custom logger (Pino, Winston, etc.):
+ * ```typescript
+ * import { createLogger, ILogger } from 'bootifyjs/logging'
+ * 
+ * // Create your own adapter that implements ILogger
+ * class MyPinoAdapter implements ILogger {
+ *   // ... implement ILogger interface
+ * }
+ * 
+ * createLogger()
+ *   .use(new MyPinoAdapter({ level: 'debug' }))
+ *   .build()
+ * ```
+ * 
+ * Custom Transport (for BaseLogger):
  * ```typescript
  * import { ILogTransport, LogEntry } from 'bootifyjs/logging'
  * 
@@ -31,21 +46,19 @@
  *   .addTransport(new MyTransport())
  *   .build()
  * ```
- * 
- * Using Pino:
- * ```typescript
- * import { createLogger, PinoAdapter } from 'bootifyjs/logging'
- * 
- * createLogger()
- *   .useCustomLogger(PinoAdapter)
- * ```
  */
 
 // Core interfaces (Strategy pattern contracts)
 export * from './core/interfaces'
 
 // Builder pattern
-export { createLogger, getLogger, LOGGER_TOKEN, LoggerBuilder } from './core/logger-builder'
+export {
+  createLogger,
+  getLogger,
+  isLoggerInitialized,
+  LOGGER_TOKEN,
+  LoggerBuilder
+} from './core/logger-builder'
 
 // Default implementations
 export { BaseLogger } from './core/base-logger'
@@ -56,8 +69,9 @@ export { ConsoleTransport, ConsoleTransportOptions } from './core/transports/con
 // Context providers
 export { RequestContextProvider } from './core/context-providers/request-context.provider'
 
-// Adapters (for using external logging libraries)
-export { PinoAdapter, PinoAdapterOptions } from './core/adapters/pino.adapter'
+// NOTE: No adapters are provided by the framework.
+// Users must create their own adapters that implement ILogger interface.
+// See documentation for examples of Pino, Winston, Bunyan adapters.
 
 // Startup loggers
 export { EnhancedStartupLogger } from './core/enhanced-startup-logger'

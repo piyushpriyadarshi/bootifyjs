@@ -14,7 +14,7 @@ import {
 import { container } from '../../core/di-container'
 import { RequestContextService } from '../../core/request-context.service'
 import { Audit, Loggable } from '../../logging/core/decorators'
-import { Logger } from '../../logging/core/logger'
+import { ILogger } from '../../logging/core/interfaces'
 import { TracingService } from '../../logging/core/tracing.service'
 import { TodoService } from '../services/todo.service'
 
@@ -52,7 +52,7 @@ export class TodoController {
   @Autowired('AuthManager')
   private authManager!: AuthManager
 
-  private logger!: Logger
+  private logger!: ILogger
 
   @Get('/')
   @Swagger({
@@ -67,9 +67,7 @@ export class TodoController {
     // })
     console.log(context.store())
 
-    const logger1 = container.resolve<Logger>(Logger)
-    logger1.info('Hello from logger 1 get all todo')
-    console.log(this.logger === logger1)
+    // Using the injected logger from @Loggable decorator
 
     this.logger.info('Hello from get all todo')
     // this.tracingService.spanEnd(span, 'ok')

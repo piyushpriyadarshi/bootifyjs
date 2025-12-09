@@ -10,6 +10,7 @@ import { createBootify } from "../BootifyApp";
 import { bootstrapCache } from "../cache";
 import { FastifyMiddleware } from "../core/decorators";
 import { container } from "../core/di-container";
+import { getLogger, ILogger } from "../logging";
 import { HealthController } from "./controllers/health.controller";
 import { TodoController } from "./controllers/todo.controller";
 dotenv.config();
@@ -26,49 +27,60 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(1),
 });
 
-// Global middleware implementations
-const corsMiddleware: FastifyMiddleware = async (request, reply) => {
-  console.log("🌐 CORS middleware executed");
-  reply.header("Access-Control-Allow-Origin", "*");
-  reply.header(
-    "Access-Control-Allow-Methods",
-    "GET, POST, PUT, DELETE, OPTIONS"
-  );
-  reply.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-};
-
-const requestTimingMiddleware: FastifyMiddleware = async (request, reply) => {
-  const startTime = Date.now();
-  console.log(`⏱️  Request started: ${request.method} ${request.url}`);
-
-  // Add timing info to request context
-  (request as any).startTime = startTime;
-  (request as any).logTiming = () => {
-    const duration = Date.now() - startTime;
-    console.log(
-      `⏱️  Request completed in ${duration}ms: ${request.method} ${request.url}`
-    );
+// Middleware factory that uses the logger
+function createLoggingMiddlewares(logger: ILogger) {
+  const corsMiddleware: FastifyMiddleware = async (_request, reply) => {
+    logger.debug("CORS middleware executed")
+    reply.header("Access-Control-Allow-Origin", "*");
+    reply.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    reply.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
   };
-};
 
-const securityHeadersMiddleware: FastifyMiddleware = async (request, reply) => {
-  console.log("🔒 Security headers middleware executed");
-  reply.header("X-Content-Type-Options", "nosniff");
-  reply.header("X-Frame-Options", "DENY");
-  reply.header("X-XSS-Protection", "1; mode=block");
-  reply.header(
-    "Strict-Transport-Security",
-    "max-age=31536000; includeSubDomains"
-  );
-};
+  const requestTimingMiddleware: FastifyMiddleware = async (request, _reply) => {
+    const startTime = Date.now();
+    logger.debug("Request started", {
+      method: request.method,
+      url: request.url
+    });
 
-const requestLoggingMiddleware: FastifyMiddleware = async (request, reply) => {
-  const clientIP = request.ip;
-  const userAgent = request.headers["user-agent"] || "Unknown";
-  console.log(
-    `📝 Request: ${request.method} ${request.url} from ${clientIP} - ${userAgent}`
-  );
-};
+    // Add timing info to request context
+    (request as any).startTime = startTime;
+    (request as any).logTiming = () => {
+      const duration = Date.now() - startTime;
+      logger.info("Request completed", {
+        method: request.method,
+        url: request.url,
+        duration,
+      });
+    };
+  };
+
+  const securityHeadersMiddleware: FastifyMiddleware = async (_request, reply) => {
+    logger.debug("Security headers middleware executed");
+    reply.header("X-Content-Type-Options", "nosniff");
+    reply.header("X-Frame-Options", "DENY");
+    reply.header("X-XSS-Protection", "1; mode=block");
+    reply.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  };
+
+  const requestLoggingMiddleware: FastifyMiddleware = async (request, _reply) => {
+    const clientIP = request.ip;
+    const userAgent = request.headers["user-agent"] || "Unknown";
+    logger.info("Incoming request", {
+      method: request.method,
+      url: request.url,
+      clientIP,
+      userAgent,
+    });
+  };
+
+  return {
+    corsMiddleware,
+    requestTimingMiddleware,
+    securityHeadersMiddleware,
+    requestLoggingMiddleware,
+  };
+}
 
 async function main() {
   // Setup JWT authentication
@@ -77,19 +89,32 @@ async function main() {
   // Register authManager in DI container for controller injection
   container.register("AuthManager", { useFactory: () => authManager });
 
-  const { app, start } = await createBootify()
+  const { app, start, logger } = await createBootify()
     // Configuration
     .useConfig(envSchema)
     .setPort(8080)
+    .setServiceName("bootify-example")
+
+    // Configure logger - user creates their own adapter that implements ILogger
+    // See src/examples/adapters/pino-logger.adapter.ts for the implementation
+    .useLogger(builder => {
+      const { PinoLoggerAdapter } = require('./adapters/pino-logger.adapter')
+
+      return builder
+        .setLevel(process.env.LOG_LEVEL as any || 'info')
+        .use(new PinoLoggerAdapter({
+          level: process.env.LOG_LEVEL as any || 'info',
+          serviceName: 'bootify-example',
+          prettyPrint: process.env.NODE_ENV !== 'production',
+        }))
+    })
 
     // Initialize services before start
     .beforeStart(async () => {
-      console.log("🔧 Initializing services...");
-
-      // Bootstrap cache
-      await bootstrapCache();
-
-      console.log("✅ Services initialized");
+      const log = getLogger();
+      log.info("Initializing services...");
+      bootstrapCache();
+      log.info("Services initialized");
     })
 
     // Register Cookie plugin
@@ -103,15 +128,15 @@ async function main() {
 
     // Register Swagger
     .usePlugin(async (app: FastifyInstance) => {
-      await app.addHook("onRequest", createContextMiddleware());
+      app.addHook("onRequest", createContextMiddleware());
       const fastifySwagger = await import("@fastify/swagger");
       const fastifySwaggerUI = await import("@fastify/swagger-ui");
 
       await app.register(fastifySwagger.default, {
         openapi: {
           info: {
-            title: "Bootify (Fastify) API",
-            description: "API documentation",
+            title: "BootifyJS Example API",
+            description: "API documentation for BootifyJS example application",
             version: "1.0.0",
           },
           servers: [{ url: `http://localhost:8080` }],
@@ -123,50 +148,55 @@ async function main() {
       });
     })
 
-    // Register global middlewares in order
-    .useMiddlewares([
-      corsMiddleware,              // 1st: Handle CORS headers
-      securityHeadersMiddleware,   // 2nd: Add security headers
-      requestTimingMiddleware,     // 3rd: Start request timing
-      requestLoggingMiddleware,    // 4th: Log request details
-    ])
-
     // Register controllers
     .useControllers([HealthController, TodoController])
 
     // Register JWT auth routes after app is built
     .beforeStart(async (app: FastifyInstance) => {
-      await registerJWTAuthRoutes(app, authManager, jwtAuthMiddleware);
+      registerJWTAuthRoutes(app, authManager, jwtAuthMiddleware);
     })
 
     // After start hook
-    .afterStart(async (app: FastifyInstance) => {
-      console.log("🚀 BootifyJS Example Server started!");
-      console.log("📋 Scheduled jobs are running in the background");
+    .afterStart(async () => {
+      const log = getLogger();
+      log.info("BootifyJS Example Server started!");
+      log.info("Scheduled jobs are running in the background");
+      log.info("API Documentation available", { url: "http://localhost:8080/api-docs" });
     })
 
     .build();
 
+  // Create middlewares with logger
+  const middlewares = createLoggingMiddlewares(logger);
+
+  // Register middlewares manually after build (since we need the logger)
+  app.addHook('onRequest', middlewares.corsMiddleware);
+  app.addHook('onRequest', middlewares.securityHeadersMiddleware);
+  app.addHook('onRequest', middlewares.requestTimingMiddleware);
+  app.addHook('onRequest', middlewares.requestLoggingMiddleware);
+
   // Add scheduler status endpoint
   app.get('/scheduler/status', async () => {
-    const { SchedulerService } = await import('../scheduling')
-    const scheduler = container.resolve<typeof SchedulerService>(SchedulerService)
-    return (scheduler as any).getStats()
-  })
+    const { SchedulerService } = await import('../scheduling');
+    const scheduler = container.resolve<typeof SchedulerService>(SchedulerService);
+    return (scheduler as any).getStats();
+  });
 
   // Add manual trigger endpoint
   app.post('/scheduler/trigger/:jobName', async (request, reply) => {
-    const { jobName } = request.params as { jobName: string }
+    const { jobName } = request.params as { jobName: string };
     try {
-      const { SchedulerService } = await import('../scheduling')
-      const scheduler = container.resolve<typeof SchedulerService>(SchedulerService)
-      await (scheduler as any).trigger(jobName)
-      return { success: true, message: `Job '${jobName}' triggered` }
+      const { SchedulerService } = await import('../scheduling');
+      const scheduler = container.resolve<typeof SchedulerService>(SchedulerService);
+      await (scheduler as any).trigger(jobName);
+      logger.info("Job triggered manually", { jobName });
+      return { success: true, message: `Job '${jobName}' triggered` };
     } catch (error: any) {
-      reply.status(404)
-      return { success: false, error: error.message }
+      logger.error("Failed to trigger job", error, { jobName });
+      reply.status(404);
+      return { success: false, error: error.message };
     }
-  })
+  });
 
   await start();
 }
