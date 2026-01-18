@@ -4,7 +4,7 @@ import { AppConfig } from './config/AppConfig'
 import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from './constants'
 import { FastifyMiddleware } from './core/decorators'
 import { Constructor, container } from './core/di-container'
-import { registerControllers } from './core/router'
+import { normalizePrefix, registerControllers } from './core/router'
 import {
     createLogger,
     ILogger,
@@ -20,6 +20,25 @@ export type ErrorHandlerFn = (error: Error, request: FastifyRequest, reply: Fast
 export type LifecycleHookFn = (app: FastifyInstance) => Promise<void> | void
 export type LoggerConfigFn = (builder: LoggerBuilder) => LoggerBuilder
 
+/**
+ * Options for registering controllers
+ */
+export interface ControllerRegistrationOptions {
+    /**
+     * Prefix to prepend to all routes in this controller group
+     * @example { prefix: '/api/v1' }
+     */
+    prefix?: string
+}
+
+/**
+ * Internal representation of a controller group with its prefix
+ */
+interface ControllerGroup {
+    controllers: Constructor[]
+    prefix: string
+}
+
 export class BootifyApp {
     private app!: FastifyInstance
     private logger!: ILogger
@@ -27,7 +46,8 @@ export class BootifyApp {
     private scheduler?: SchedulerService
     private port: number = DEFAULT_SERVER_PORT
     private hostname: string = DEFAULT_SERVER_HOST
-    private controllers: Constructor[] = []
+    private basePrefix: string = ''
+    private controllerGroups: ControllerGroup[] = []
     private plugins: PluginRegistrationFn[] = []
     private beforeStartHooks: LifecycleHookFn[] = []
     private afterStartHooks: LifecycleHookFn[] = []
@@ -68,8 +88,40 @@ export class BootifyApp {
         return this
     }
 
-    useControllers(controllers: Constructor[]): this {
-        this.controllers.push(...controllers)
+    /**
+     * Set global base prefix for all routes
+     * This prefix will be prepended to all controller routes
+     * 
+     * @example
+     * createBootify()
+     *   .setBasePrefix('/api/v1')
+     *   .useControllers([UserController]) // Routes will be /api/v1/users/...
+     */
+    setBasePrefix(prefix: string): this {
+        this.basePrefix = normalizePrefix(prefix)
+        return this
+    }
+
+    /**
+     * Register controllers with optional group prefix
+     * The final route URL is: basePrefix + groupPrefix + controllerPrefix + methodPath
+     * 
+     * @example
+     * // Without prefix
+     * .useControllers([UserController])
+     * 
+     * // With group prefix
+     * .useControllers([UserController, ProductController], { prefix: '/api/v1' })
+     * 
+     * // Multiple groups with different prefixes
+     * .useControllers([PublicController])
+     * .useControllers([AdminController], { prefix: '/admin' })
+     */
+    useControllers(controllers: Constructor[], options?: ControllerRegistrationOptions): this {
+        this.controllerGroups.push({
+            controllers,
+            prefix: normalizePrefix(options?.prefix || '')
+        })
         return this
     }
 
@@ -163,10 +215,18 @@ export class BootifyApp {
             await plugin(this.app)
         }
 
-        if (this.controllers.length > 0) {
+        // Register each controller group with its combined prefix
+        const totalControllers = this.controllerGroups.reduce((sum, g) => sum + g.controllers.length, 0)
+        if (totalControllers > 0) {
             this.startupLogger.logPhaseStart('Registering Controllers')
-            this.startupLogger.logComponentStart('Controllers', `${this.controllers.length} found`)
-            registerControllers(this.app, this.controllers)
+            this.startupLogger.logComponentStart('Controllers', `${totalControllers} found`)
+
+            for (const group of this.controllerGroups) {
+                // Combine basePrefix + groupPrefix
+                const combinedPrefix = normalizePrefix(this.basePrefix + group.prefix)
+                registerControllers(this.app, group.controllers, combinedPrefix)
+            }
+
             this.startupLogger.logComponentComplete()
         }
 

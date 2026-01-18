@@ -138,24 +138,44 @@ export interface SwaggerOptions {
 }
 
 /**
- * Decorator to add Swagger/OpenAPI documentation metadata to a route.
- * This metadata will be merged with the schema generated from @Schema decorator.
+ * Decorator to add Swagger/OpenAPI documentation metadata to a controller class or route method.
+ * 
+ * When used on a controller class, the metadata applies to all routes in that controller.
+ * When used on a method, it overrides/merges with controller-level metadata.
  * 
  * @example
+ * // Controller-level (applies to all routes)
+ * @Controller('/users')
+ * @Swagger({
+ *   tags: ['Users'],
+ *   security: [{ bearerAuth: [] }]
+ * })
+ * export class UserController {
+ *   @Get('/:id')  // Inherits tags and security
+ *   getUserById() {}
+ * }
+ * 
+ * // Method-level (overrides controller)
  * @Get('/users/:id')
  * @Swagger({
  *   summary: 'Get user by ID',
  *   description: 'Retrieves a single user by their unique identifier',
- *   tags: ['Users'],
+ *   tags: ['Users', 'Public'],  // Merges with controller tags
  *   deprecated: false
  * })
  * getUserById(@Param('id') id: string) {
  *   // ...
  * }
  */
-export const Swagger = (options: SwaggerOptions): MethodDecorator => {
-  return (target: any, propertyKey: string | symbol) => {
-    Reflect.defineMetadata(METADATA_KEYS.swaggerMetadata, options, target, propertyKey)
+export const Swagger = (options: SwaggerOptions): ClassDecorator & MethodDecorator => {
+  return (target: any, propertyKey?: string | symbol) => {
+    if (propertyKey) {
+      // Method decorator
+      Reflect.defineMetadata(METADATA_KEYS.swaggerMetadata, options, target, propertyKey)
+    } else {
+      // Class decorator
+      Reflect.defineMetadata(METADATA_KEYS.swaggerMetadata, options, target)
+    }
   }
 }
 

@@ -10,6 +10,12 @@
   "scripts": {
     "clean": "rm -rf dist",
     "build": "npm run clean && tsc",
+    "build:binary": "bun build --compile --minify-whitespace --minify-syntax --target bun --outfile server src/examples/index.ts",
+    "build:binary:cluster": "bun build --compile --minify-whitespace --minify-syntax --target bun --outfile server src/cluster.ts",
+    "build:binary:linux": "bun build --compile --minify-whitespace --minify-syntax --target bun-linux-x64 --outfile server src/examples/index.ts",
+    "docker:build": "docker build -t bootifyjs .",
+    "docker:build:cluster": "docker build -t bootifyjs:cluster -f Dockerfile.cluster .",
+    "docker:run": "docker run -p 8080:8080 --env-file .env bootifyjs",
     "prepublishOnly": "npm run build",
     "dev": "nodemon --watch src --exec ts-node src/examples/index.ts"
   },

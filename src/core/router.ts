@@ -1,16 +1,58 @@
 import { FastifyInstance, FastifyReply, FastifyRequest, RouteOptions } from 'fastify'
 import { zodToJsonSchema } from 'zod-to-json-schema'
-import { METADATA_KEYS, ValidationDecoratorOptions } from './decorators'
+import { METADATA_KEYS, SwaggerOptions, ValidationDecoratorOptions } from './decorators'
 import { Constructor, container } from './di-container'
 
-// const buildJsonSchema = (schemas: any) => {
-//   const schema: any = {}
-//   if (schemas.body) schema.body = zodToJsonSchema(schemas.body)
-//   if (schemas.query) schema.querystring = zodToJsonSchema(schemas.query)
-//   if (schemas.params) schema.params = zodToJsonSchema(schemas.params)
+/**
+ * Normalize a URL prefix - ensures it starts with / and doesn't end with /
+ */
+export function normalizePrefix(prefix: string): string {
+  if (!prefix) return ''
+  let normalized = prefix.startsWith('/') ? prefix : `/${prefix}`
+  return normalized.endsWith('/') ? normalized.slice(0, -1) : normalized
+}
 
-//   return schema
-// }
+/**
+ * Join multiple path segments into a single URL path
+ */
+export function joinPaths(...paths: string[]): string {
+  const joined = paths
+    .filter(Boolean)
+    .join('/')
+    .replace(/\/+/g, '/')
+  return joined || '/'
+}
+
+/**
+ * Merge controller-level and method-level Swagger metadata
+ * Method-level takes precedence, except for tags which are merged (unique values)
+ * 
+ * @param controllerMeta - Swagger metadata from controller class
+ * @param methodMeta - Swagger metadata from method
+ * @returns Merged metadata with method overrides and tag merging
+ */
+function mergeSwaggerMetadata(
+  controllerMeta: SwaggerOptions | undefined,
+  methodMeta: SwaggerOptions | undefined
+): SwaggerOptions {
+  if (!controllerMeta) return methodMeta || {}
+  if (!methodMeta) return controllerMeta
+
+  // Merge tags (unique values)
+  const controllerTags = controllerMeta.tags || []
+  const methodTags = methodMeta.tags || []
+  const mergedTags = [...controllerTags, ...methodTags]
+  const uniqueTags = [...new Set(mergedTags)]
+
+  return {
+    // Controller defaults
+    ...controllerMeta,
+    // Method overrides
+    ...methodMeta,
+    // Special: merge tags (only if there are any tags)
+    tags: uniqueTags.length > 0 ? uniqueTags : undefined,
+  }
+}
 
 function buildFastifySchema(options: ValidationDecoratorOptions) {
   const schema: any = {}
@@ -28,8 +70,19 @@ function buildFastifySchema(options: ValidationDecoratorOptions) {
   return schema
 }
 
-export function registerControllers(fastify: FastifyInstance, controllers: Constructor[]) {
-  console.log('📋 Registering controllers...')
+/**
+ * Register controllers with Fastify
+ * @param fastify - Fastify instance
+ * @param controllers - Array of controller classes
+ * @param groupPrefix - Optional prefix to prepend to all routes in this group
+ */
+export function registerControllers(
+  fastify: FastifyInstance,
+  controllers: Constructor[],
+  groupPrefix: string = ''
+) {
+  const prefixDisplay = groupPrefix ? ` (prefix: ${groupPrefix})` : ''
+  console.log(`📋 Registering controllers${prefixDisplay}...`)
 
   controllers.forEach((controllerClass) => {
     // 👇 Read controller-level middleware
@@ -37,6 +90,10 @@ export function registerControllers(fastify: FastifyInstance, controllers: Const
     const controllerInstance = container.resolve(controllerClass) as any
     const prefix = Reflect.getMetadata(METADATA_KEYS.controllerPrefix, controllerClass) || ''
     const routes = Reflect.getMetadata(METADATA_KEYS.routes, controllerClass) || []
+
+    // 🆕 Read controller-level Swagger metadata
+    const controllerSwaggerMeta: SwaggerOptions | undefined =
+      Reflect.getMetadata(METADATA_KEYS.swaggerMetadata, controllerClass)
 
     routes.forEach((route: any) => {
       // 👇 Read method-level middleware
@@ -53,20 +110,23 @@ export function registerControllers(fastify: FastifyInstance, controllers: Const
         route.handlerName
       )
 
-      // console.log(validationSchemas)
-      const url = `${prefix}${route.path}`.replace(/\/+/g, '/')
+      // Calculate final URL: groupPrefix + controllerPrefix + methodPath
+      const url = joinPaths(groupPrefix, prefix, route.path)
 
-      // Get Swagger metadata if it exists
-      const swaggerMetadata = Reflect.getMetadata(
+      // 🆕 Read method-level Swagger metadata
+      const methodSwaggerMeta: SwaggerOptions | undefined = Reflect.getMetadata(
         METADATA_KEYS.swaggerMetadata,
         controllerInstance,
         route.handlerName
       )
 
+      // 🆕 Merge controller and method Swagger metadata
+      const swaggerMetadata = mergeSwaggerMetadata(controllerSwaggerMeta, methodSwaggerMeta)
+
       // Build the schema, merging validation schemas with swagger metadata
       let schema: any = validationSchemas ? buildFastifySchema(validationSchemas) : {}
 
-      if (swaggerMetadata) {
+      if (swaggerMetadata && Object.keys(swaggerMetadata).length > 0) {
         schema = {
           ...schema,
           summary: swaggerMetadata.summary,

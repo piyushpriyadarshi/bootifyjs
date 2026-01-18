@@ -16,10 +16,10 @@ import { TodoController } from "./controllers/todo.controller";
 dotenv.config();
 // Import the RedisCacheStore to trigger @Service decorator registration
 import "../cache/stores/redis-cache.store";
-import { createContextMiddleware } from "../middleware";
 // Import scheduled tasks service to register it with DI
 import "./services/scheduled-tasks.service";
 // Import event handlers to register them with DI (must be after events to avoid circular deps)
+import { TestSwaggerController } from "./controllers/test-swagger.controller";
 import "./events/TodoEventHandler";
 
 // --- Application Startup ---
@@ -97,19 +97,14 @@ async function main() {
     .setPort(8080)
     .setServiceName("bootify-example")
 
-    // Configure logger - user creates their own adapter that implements ILogger
-    // See src/examples/adapters/pino-logger.adapter.ts for the implementation
-    .useLogger(builder => {
-      const { PinoLoggerAdapter } = require('./adapters/pino-logger.adapter')
-
-      return builder
-        .setLevel(process.env.LOG_LEVEL as any || 'info')
-        .use(new PinoLoggerAdapter({
-          level: process.env.LOG_LEVEL as any || 'info',
-          serviceName: 'bootify-example',
-          prettyPrint: process.env.NODE_ENV !== 'production',
-        }))
-    })
+    // Configure logger - using built-in console logger (no external dependencies)
+    .useLogger(builder => builder
+      .setLevel((process.env.LOG_LEVEL as any) || 'info')
+      .configureConsole({
+        colorize: process.env.NODE_ENV !== 'production',
+        prettyPrint: process.env.NODE_ENV !== 'production',
+      })
+    )
 
     // Initialize services before start
     .beforeStart(async () => {
@@ -130,7 +125,7 @@ async function main() {
 
     // Register Swagger
     .usePlugin(async (app: FastifyInstance) => {
-      app.addHook("onRequest", createContextMiddleware());
+      // app.addHook("onRequest", createContextMiddleware());
       const fastifySwagger = await import("@fastify/swagger");
       const fastifySwaggerUI = await import("@fastify/swagger-ui");
 
@@ -150,8 +145,10 @@ async function main() {
       });
     })
 
-    // Register controllers
-    .useControllers([HealthController, TodoController])
+    // Register controllers with API prefix
+    // Health controller at root, Todo controller under /api/v1
+    .useControllers([HealthController])  // /health
+    .useControllers([TodoController, TestSwaggerController], { prefix: '/api/v1' })  // /api/v1/todos, /api/v1/test-swagger
 
     // Register JWT auth routes after app is built
     .beforeStart(async (app: FastifyInstance) => {

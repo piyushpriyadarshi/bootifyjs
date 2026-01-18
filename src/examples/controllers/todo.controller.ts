@@ -43,6 +43,11 @@ const getTodoByIdSchema = {
 @Loggable()
 @Controller('/todos')
 // @UseMiddleware(authenticate(process.env.JWT_SECRET || 'your-secret-key'))
+@Swagger({
+  tags: ['Todos'],
+  description: 'Todo management endpoints'
+  // security: [{ bearerAuth: [] }]  // Temporarily commented out
+})
 export class TodoController {
   constructor(private readonly todoService: TodoService) { }
 
@@ -57,8 +62,9 @@ export class TodoController {
   @Get('/')
   @Swagger({
     summary: 'Get all todos',
-    description: 'Retrieves a list of all todo items',
-    tags: ['Todos'],
+    description: 'Retrieves a list of all todo items'
+    // tags inherited from controller: ['Todos']
+    // security inherited from controller: [{ bearerAuth: [] }]
   })
   getAllTodos() {
     const context = container.resolve<RequestContextService>(RequestContextService)
@@ -79,7 +85,7 @@ export class TodoController {
   @Swagger({
     summary: 'Get todo by ID',
     description: 'Retrieves a single todo item by its unique identifier',
-    tags: ['Todos'],
+    tags: ['Todos', 'Public']  // Merges with controller tags: ['Todos', 'Public']
   })
   getTodoById(@Param('id') id: string) {
     this.logger.info('Hello from get todo by id')
@@ -104,8 +110,8 @@ export class TodoController {
   @Swagger({
     summary: 'Create a new todo',
     description: 'Creates a new todo item with the provided text',
-    tags: ['Todos'],
-    operationId: 'createTodo',
+    operationId: 'createTodo'
+    // security: []  // Temporarily commented out
   })
   // @UseMiddleware(authorize(['manager']))
   async createTodo(@Body() body: z.infer<typeof todoSchema>) {
