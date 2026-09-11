@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.2] - 2026-09-12
+
+### Fixed
+- **CLI templates:** generated `src/main.ts` imported the deprecated
+  `createBootify` alias while calling `createBootifyApp()`, so every scaffolded
+  project failed `npm run typecheck` / startup with
+  `Cannot find name 'createBootifyApp'`. Both the minimal and goals templates
+  now import `createBootifyApp` (the goals template also dropped an unused
+  `setupAuth` import), with regression assertions in the CLI tests.
+- **CLI scaffold:** `.env` is now seeded from `.env.example` (gitignored by
+  every template), so `npm run dev` works immediately after scaffolding —
+  previously the first run failed with a config-validation error until you
+  copied the example manually.
+- **Goals template generator:** now uses a strict allowlist (plus a fixed
+  source path) so regenerating cannot ship local-only material — e.g. API
+  collections containing credentials — and the template includes
+  `.env.example`/`.gitignore`.
+
 ## [3.0.1] - 2026-09-11
 
 ### Fixed

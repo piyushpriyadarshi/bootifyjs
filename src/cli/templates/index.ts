@@ -187,7 +187,7 @@ NODE_ENV=development
 
 const TOUR_MAIN = `import 'reflect-metadata'
 import 'dotenv/config'
-import { createBootify } from 'bootifyjs'
+import { createBootifyApp } from 'bootifyjs'
 import { bootstrapEventSystem } from 'bootifyjs/events'
 import { AuthController, findDemoUser, validateDemoCredentials } from './modules/auth/auth.module'
 import { HelloController } from './modules/hello/hello.controller'
@@ -607,6 +607,14 @@ export async function scaffoldProject(
     const target = path.join(dir, relativePath)
     fs.mkdirSync(path.dirname(target), { recursive: true })
     fs.writeFileSync(target, applyPlaceholders(rawContent, options))
+    filesWritten++
+  }
+
+  // Dev convenience: seed `.env` from `.env.example` (every template gitignores
+  // it), so `npm run dev` works right after scaffolding.
+  const envExample = template.files['.env.example']
+  if (envExample && !template.files['.env']) {
+    fs.writeFileSync(path.join(dir, '.env'), applyPlaceholders(envExample, options))
     filesWritten++
   }
 

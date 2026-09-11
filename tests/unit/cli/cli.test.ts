@@ -98,17 +98,22 @@ describe('scaffoldProject', () => {
 
     const dir = path.join(base, 'my-api')
     expect(result.dir).toBe(dir)
-    expect(result.filesWritten).toBe(Object.keys(TEMPLATES.minimal.files).length)
+    // template files + the seeded dev .env
+    expect(result.filesWritten).toBe(Object.keys(TEMPLATES.minimal.files).length + 1)
+    expect(fs.existsSync(path.join(dir, '.env'))).toBe(true)
+    expect(fs.readFileSync(path.join(dir, '.env'), 'utf8')).toContain('JWT_ACCESS_SECRET=')
 
     const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'))
     expect(pkg.name).toBe('my-api')
 
     const main = fs.readFileSync(path.join(dir, 'src/main.ts'), 'utf8')
+    expect(main).toContain("import { createBootifyApp } from 'bootifyjs'")
     expect(main).toContain("createBootifyApp()")
     expect(main).toContain(".setServiceName('my-api')")
     expect(main).toContain('.enableAuth(')
     expect(main).toContain('bootstrapEventSystem')
     expect(main).not.toContain('{{PROJECT_NAME}}')
+    expect(main).not.toContain('createBootify,') // no stale alias import
 
     // tour files present
     expect(fs.existsSync(path.join(dir, '.gitignore'))).toBe(true)
@@ -144,12 +149,21 @@ describe('scaffoldProject', () => {
     expect(pkg.dependencies.bootifyjs).toBe('^3.0.0')
 
     const main = fs.readFileSync(path.join(dir, 'src/main.ts'), 'utf8')
+    expect(main).toContain("import { createBootifyApp, container } from 'bootifyjs'")
+    expect(main).toContain("createBootifyApp()")
     expect(main).toContain('.enableAuth(')
     expect(main).toContain('bootstrapEventSystem')
+    expect(main).not.toContain('createBootify,') // no stale alias import
 
     expect(fs.existsSync(path.join(dir, 'migrations/001_init.sql'))).toBe(true)
     expect(fs.existsSync(path.join(dir, 'src/modules/goals/goal.service.ts'))).toBe(true)
     expect(fs.existsSync(path.join(dir, 'src/events/goal-events.ts'))).toBe(true)
+    // dev env seeded from .env.example; .gitignore ships with the template
+    expect(fs.existsSync(path.join(dir, '.env'))).toBe(true)
+    expect(fs.existsSync(path.join(dir, '.env.example'))).toBe(true)
+    expect(fs.existsSync(path.join(dir, '.gitignore'))).toBe(true)
+    // never ship local-only material (e.g. Bruno collections with credentials)
+    expect(fs.existsSync(path.join(dir, 'Goal Setter API'))).toBe(false)
     // no lockfile / coverage junk
     expect(fs.existsSync(path.join(dir, 'package-lock.json'))).toBe(false)
   })
