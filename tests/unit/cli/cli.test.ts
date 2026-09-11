@@ -4,6 +4,7 @@ import * as path from 'node:path'
 import * as os from 'node:os'
 import { scaffoldProject, TEMPLATES } from '../../../src/cli/templates'
 import { generateComponent, GENERATORS } from '../../../src/cli/generate'
+import { main } from '../../../src/cli/cli'
 
 const created: string[] = []
 
@@ -16,6 +17,42 @@ function tmpDir(): string {
 afterEach(() => {
   for (const dir of created.reverse()) fs.rmSync(dir, { recursive: true, force: true })
   created.length = 0
+})
+
+describe('CLI argument handling', () => {
+  it('new <name> --yes defaults to the minimal template (regression)', async () => {
+    const base = tmpDir()
+    const prevCwd = process.cwd()
+    const prevExitCode = process.exitCode
+    process.chdir(base)
+    try {
+      await main(['new', 'cli-smoke', '--yes', '--skip-install'])
+
+      expect(process.exitCode ?? 0).toBe(0)
+      expect(fs.existsSync(path.join(base, 'cli-smoke', 'src/main.ts'))).toBe(true)
+      // minimal template, not goals (goals ships migrations/)
+      expect(fs.existsSync(path.join(base, 'cli-smoke', 'migrations'))).toBe(false)
+    } finally {
+      process.chdir(prevCwd)
+      process.exitCode = prevExitCode
+    }
+  })
+
+  it('--template goals is honored in non-interactive mode', async () => {
+    const base = tmpDir()
+    const prevCwd = process.cwd()
+    const prevExitCode = process.exitCode
+    process.chdir(base)
+    try {
+      await main(['new', 'cli-goals', '--template', 'goals', '--yes', '--skip-install'])
+
+      expect(process.exitCode ?? 0).toBe(0)
+      expect(fs.existsSync(path.join(base, 'cli-goals', 'migrations/001_init.sql'))).toBe(true)
+    } finally {
+      process.chdir(prevCwd)
+      process.exitCode = prevExitCode
+    }
+  })
 })
 
 describe('templates registry', () => {

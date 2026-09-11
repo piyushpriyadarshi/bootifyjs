@@ -79,6 +79,9 @@ async function runNew(args: NewArgs): Promise<void> {
     }
   }
 
+  // Non-interactive default (also covers `--skip-install` without `--yes`).
+  if (!template) template = 'minimal'
+
   if (!name) {
     console.error('✗ Project name is required (npx bootifyjs new <name>)')
     process.exitCode = 1
