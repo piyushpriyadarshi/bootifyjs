@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /**
  * CLI entry point (bin). Guards against double execution under CJS.
  */

@@ -11,7 +11,7 @@
     "typescript"
   ],
   "author": "Piyush Priyadarshi",
-  "license": "ISC",
+  "license": "MIT",
   "description": "Spring Boot-inspired Fastify framework: decorators, DI, JWT auth, swagger, events, scheduling, sqlite via commons",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
