@@ -1,0 +1,59 @@
+name: Stage Publish
+
+# Stages the package on the npm registry WITHOUT 2FA. A maintainer approves it
+# later, which is when proof-of-presence (2FA) happens:
+#
+#   npx npm@^11.19.1 stage list
+#   npx npm@^11.19.1 stage approve <stage-id>   # prompts for OTP, publishes
+#
+# Requires the repository secret NPM_TOKEN: a granular access token with
+# *stage-only* write access to `bootifyjs` (no bypass-2FA required).
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  id-token: write # provenance attestation
+
+concurrency:
+  group: stage-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - name: Use an npm with `stage` support
+        run: npm install -g 'npm@^11.19.1' && npm --version
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+      - name: Verify tag matches package.json version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          pkg=$(node -p "require('./package.json').version")
+          tag="${GITHUB_REF_NAME#v}"
+          echo "package.json=$pkg tag=$tag"
+          if [ "$pkg" != "$tag" ]; then
+            echo "::error::tag ($tag) does not match package.json version ($pkg)"
+            exit 1
+          fi
+
+      - name: Stage on npm
+        run: npm stage publish --provenance --ignore-scripts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

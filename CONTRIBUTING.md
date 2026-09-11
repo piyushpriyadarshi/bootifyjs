@@ -45,3 +45,20 @@ three pass locally too.
   `refactor(events): ...`, `test(auth): ...`, `chore: ...`
 - Breaking changes must include a CHANGELOG entry under **Changed**/**Removed**
   with a migration note. Deprecate first, remove in the next major.
+
+### Publishing (staged)
+
+Releases never publish directly from CI. Pushing a `v*` tag triggers the
+**Stage Publish** workflow, which typechecks, tests, builds and *stages* the
+version on npm without 2FA. A maintainer then approves it, which is where
+proof-of-presence happens:
+
+```bash
+git tag -a vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z   # CI stages
+npx npm@^11.19.1 stage list                                # find the stage id
+npx npm@^11.19.1 stage approve <stage-id>                  # prompts for OTP → publishes
+```
+
+`npm stage` needs npm ≥ 11.19 (or use the Staged Packages page on npmjs.com).
+Setup: add a granular access token with **stage-only** write access to
+`bootifyjs` as the `NPM_TOKEN` repository secret — no bypass-2FA required.
