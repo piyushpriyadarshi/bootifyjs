@@ -22,7 +22,7 @@ A powerful, colorful, and feature-rich startup logger for Bootify applications w
 ```typescript
 import { createBootify } from "bootify";
 
-const { app, start, startupLogger } = await createBootify()
+const { app, start, startupLogger } = await createBootifyApp()
   .setPort(8080)
   .useControllers([HealthController, UserController])
   .build();
@@ -411,7 +411,7 @@ startupLogger.registerHealthCheck("cache", async () => {
 ```typescript
 import { createBootify, ComponentCategory } from "bootify";
 
-const { app, start, startupLogger } = await createBootify()
+const { app, start, startupLogger } = await createBootifyApp()
   .setPort(8080)
 
   // Initialize database

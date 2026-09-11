@@ -17,17 +17,38 @@ const defaultContextExtractor: ContextExtractor = (req: FastifyRequest, res: Fas
   }
 }
 
+export interface ContextMiddlewareOptions {
+  /**
+   * Reuse an incoming `x-request-id` header as the request's correlation id
+   * (trace propagation across services) instead of always generating a new one.
+   * Default: true.
+   */
+  trustIncomingRequestId?: boolean
+}
+
 /**
  * Creates a context middleware with optional user-defined context extraction
- * @param contextExtractor Optional function to extract additional context from request
+ * @param extractorOrOptions Optional extractor function and/or options
  */
-export const createContextMiddleware = (contextExtractor?: ContextExtractor) => {
-  const extractor = contextExtractor || defaultContextExtractor
+export const createContextMiddleware = (
+  extractorOrOptions?: ContextExtractor | ContextMiddlewareOptions,
+  maybeOptions?: ContextMiddlewareOptions
+) => {
+  const extractor =
+    typeof extractorOrOptions === 'function' ? extractorOrOptions : defaultContextExtractor
+  const options: ContextMiddlewareOptions =
+    (typeof extractorOrOptions === 'function' ? maybeOptions : extractorOrOptions) || {}
+  const trustIncomingRequestId = options.trustIncomingRequestId !== false
 
   return (req: FastifyRequest, res: FastifyReply, done: HookHandlerDoneFunction) => {
     // Run the rest of the request lifecycle within a new context
     RequestContextService.run(() => {
-      const requestId = randomUUID()
+      // Propagate an incoming trace id when present (cross-service tracing)
+      const incoming =
+        trustIncomingRequestId &&
+        ((req.headers['x-request-id'] as string | undefined) ||
+          (req.headers['X-Request-Id'] as string | undefined))
+      const requestId = incoming || randomUUID()
       const contextService = new RequestContextService()
 
       // Set default framework context
@@ -36,15 +57,13 @@ export const createContextMiddleware = (contextExtractor?: ContextExtractor) => 
       // Extract user-defined context
       const userContext = extractor(req, res)
 
-      console.log('createContextMiddleware', userContext)
-
       // Set user-defined context values
       Object.entries(userContext).forEach(([key, value]) => {
         contextService.set(key, value)
       })
 
-        // Attach request ID to the request object
-        ; (req as any).id = requestId
+      // Attach request ID to the request object
+      ;(req as any).id = requestId
 
       // Attach headers
       res.header('X-Request-Id', requestId)

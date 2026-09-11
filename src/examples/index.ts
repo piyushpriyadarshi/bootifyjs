@@ -6,7 +6,7 @@ import {
   registerJWTAuthRoutes,
   setupJwtAuth,
 } from "../auth/examples/basic-usage";
-import { createBootify } from "../BootifyApp";
+import { createBootifyApp } from "../BootifyApp";
 import { bootstrapCache } from "../cache";
 import { FastifyMiddleware } from "../core/decorators";
 import { container } from "../core/di-container";
@@ -89,9 +89,9 @@ async function main() {
   const { middleware: jwtAuthMiddleware, authManager } = await setupJwtAuth();
 
   // Register authManager in DI container for controller injection
-  container.register("AuthManager", { useFactory: () => authManager });
+  container.register("AuthManager", { useFactory: () => authManager, override: true });
 
-  const { app, start, logger } = await createBootify()
+  const bootify = await createBootifyApp()
     // Configuration
     .useConfig(envSchema)
     .setPort(8080)
@@ -165,6 +165,9 @@ async function main() {
 
     .build();
 
+  const app = bootify.handle
+  const logger = bootify.logger
+
   // Create middlewares with logger
   const middlewares = createLoggingMiddlewares(logger);
 
@@ -197,7 +200,7 @@ async function main() {
     }
   });
 
-  await start();
+  await bootify.start();
 }
 
 main();

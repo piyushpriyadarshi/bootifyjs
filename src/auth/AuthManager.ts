@@ -67,7 +67,6 @@ export class AuthManager {
    */
   async authenticate(context: AuthContext, strategyName?: string): Promise<AuthResult> {
     const strategy = this.selectStrategy(context, strategyName);
-
     if (!strategy) {
       return {
         success: false,
@@ -75,7 +74,6 @@ export class AuthManager {
       };
     }
 
-    console.log('AuthManager.authenticate', strategy.name, context)
     try {
       const result = await strategy.authenticate(context);
 

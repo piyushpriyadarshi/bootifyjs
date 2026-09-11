@@ -35,7 +35,11 @@ The `InMemoryCacheStore` is the default cache store that uses a JavaScript `Map`
 - **Not distributed**: Cache is not shared across multiple instances
 - **Memory bound**: Limited by application memory
 - **Not persistent**: Cache is lost on application restart
-- **No eviction policy**: No LRU or other eviction strategies
+- **Opt-in LRU**: pass `{ maxEntries }` to bound the store; unlimited by
+  default (`new InMemoryCacheStore({ maxEntries: 10_000 })`,
+  `enableCache({ maxEntries })`, or `bootstrapCache({ maxEntries })`)
+- **Reference semantics**: values are stored by reference — treat cached
+  objects as read-only (Redis stores JSON copies)
 
 #### Usage
 
@@ -76,11 +80,7 @@ export class UserService {
 
 ### Redis Cache Store
 
-The `RedisCacheStore` provides distributed caching using Redis. It's ideal for production applications with multiple instances.
-
-:::note
-The current implementation uses an in-memory Map as a placeholder. To use actual Redis, you'll need to implement the Redis client integration.
-:::
+The `RedisCacheStore` provides distributed caching using Redis. It's ideal for production applications with multiple instances. The Redis client is **app-owned**: BootifyJS never creates connections, and `ioredis` is not a dependency (any client with the `CacheRedisClient` shape works).
 
 #### Features
 
@@ -88,6 +88,7 @@ The current implementation uses an in-memory Map as a placeholder. To use actual
 - **Persistent**: Cache survives application restarts
 - **Scalable**: Handle large datasets efficiently
 - **TTL support**: Native Redis TTL functionality
+- **Atomic tag indexes**: Redis Sets when the client exposes `sAdd`/`sMembers`/`expire`
 
 #### When to Use
 
@@ -99,53 +100,43 @@ The current implementation uses an in-memory Map as a placeholder. To use actual
 
 #### Configuration
 
-To use the Redis cache store, import it in your application:
+Construct a client (e.g. `ioredis`), own its lifecycle, and pass it in:
 
 ```typescript
-import { BootifyApp } from "bootifyjs";
-// Import to register the Redis store
-import "bootifyjs/cache/stores/redis-cache.store";
+import Redis from "ioredis";
 
-const app = new BootifyApp({
-  // Redis store is now registered
-});
-
-await app.start();
+const app = await createBootifyApp()
+  .enableCache({ client: new Redis("redis://localhost:6379") })
+  .build();
 ```
+
+Or build the store directly (same client shape, `onError` for logging):
+
+```typescript
+import { RedisCacheStore } from "bootifyjs/cache";
+
+const store = new RedisCacheStore({
+  client: new Redis("redis://localhost:6379"),
+  onError: (error) => logger.warn("redis error", { error }),
+});
+```
+
+`clientFactory?: () => Promise<CacheRedisClient>` is available for lazy/advanced
+setups, but exactly one of `client`/`clientFactory` is required —
+constructing the store without either throws `CacheConnectionError`.
 
 #### Example with Redis
 
 ```typescript
 // main.ts
-import { BootifyApp } from "bootifyjs";
-import "bootifyjs/cache/stores/redis-cache.store";
+import Redis from "ioredis";
 
-const app = new BootifyApp({
-  controllers: [UserController],
-  services: [UserService],
-});
+const app = await createBootifyApp()
+  .useControllers([UserController])
+  .enableCache({ client: new Redis(process.env.REDIS_URL!) })
+  .build();
 
 await app.start();
-```
-
-```typescript
-// user.service.ts
-import { Service } from "bootifyjs";
-import { Cacheable, CacheEvict } from "bootifyjs/cache";
-
-@Service()
-export class UserService {
-  // Cache is now stored in Redis
-  @Cacheable({ key: "user", ttl: 300 })
-  async getUser(id: string) {
-    return await this.database.findUser(id);
-  }
-
-  @CacheEvict({ key: "user" })
-  async updateUser(id: string, data: Partial<User>) {
-    return await this.database.updateUser(id, data);
-  }
-}
 ```
 
 ## Store Comparison

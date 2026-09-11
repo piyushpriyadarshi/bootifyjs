@@ -123,7 +123,7 @@ Each job tracks:
 ```typescript
 import { createBootify } from "bootifyjs";
 
-const { app, scheduler } = await createBootify().useScheduler(true).build();
+const { app, scheduler } = await createBootifyApp().useScheduler(true).build();
 
 // Status endpoint
 app.get("/scheduler/status", () => scheduler?.getStats());

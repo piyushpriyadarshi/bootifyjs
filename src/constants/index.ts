@@ -42,7 +42,22 @@ export const FRAMEWORK_METADATA_KEYS = {
   MIDDLEWARE: 'bootify:middleware',
   AUTOWIRED_PROPERTIES: 'bootify:autowired-properties',
   AUTOWIRED_PARAMS: 'bootify:autowired-params',
+  AUTH_REQUIRED: 'bootify:auth-required',
+  AUTH_ROLES: 'bootify:auth-roles',
 } as const
+
+/**
+ * Container token under which `enableAuth()` registers
+ * `{ authenticate, authorize(roles) }` middleware. The router resolves this
+ * token when it sees `@UseAuth()`/`@Roles()` — this keeps core decoupled
+ * from the auth module.
+ */
+export const AUTH_MIDDLEWARE_TOKEN = Symbol.for('bootify.auth.middleware')
+
+export interface AuthMiddlewareBundle {
+  authenticate: (request: any, reply: any) => Promise<void> | void
+  authorize: (roles: string[]) => (request: any, reply: any) => Promise<void> | void
+}
 
 // Environment Constants
 export const ENVIRONMENTS = {

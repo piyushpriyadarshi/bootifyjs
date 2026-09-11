@@ -1,12 +1,21 @@
-import { AnyZodObject, z, ZodObject, ZodRawShape } from 'zod'
+import { AnyZodObject, z, ZodObject, ZodRawShape, ZodIssue } from 'zod'
+import { BootifyStateError } from '../core/errors'
+import { ConfigValidationError } from './errors'
 
 // Framework-level configuration schema
+const booleanFromEnv = z.preprocess(
+  (val) => (val === undefined ? val : String(val).toLowerCase() === 'true'),
+  z.boolean()
+)
+
 const BaseFrameworkConfigSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   SERVER_PORT: z.coerce.number().default(4000),
   SERVER_HOST: z.string().default('localhost'),
   //   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('debug'),
-  CONFIG_DEBUG: z.coerce.boolean().default(true),
+  // `z.coerce.boolean()` would treat the string 'false' as `true` — parse real
+  // boolean env values instead ('false'/'0'/'no' → false, undefined → default).
+  CONFIG_DEBUG: booleanFromEnv.default(true),
 })
 
 const LoggingConfigSchema = z.object({
@@ -36,6 +45,15 @@ const FrameworkConfigSchema = BaseFrameworkConfigSchema.merge(LoggingConfigSchem
 
 type FrameworkConfig = z.infer<typeof FrameworkConfigSchema>
 
+/** Keys whose values are redacted when the config is logged. */
+const SENSITIVE_KEY_FRAGMENTS = ['password', 'secret', 'key', 'token', 'database_url']
+
+/** Returns true when a config key holds a sensitive value (used for log redaction). */
+export function isSensitiveKey(key: string): boolean {
+  const lower = key.toLowerCase()
+  return SENSITIVE_KEY_FRAGMENTS.some((fragment) => lower.includes(fragment))
+}
+
 export class AppConfig<T extends ZodRawShape> {
   private static instance: AppConfig<any>
   private config: FrameworkConfig & z.infer<ZodObject<T>>
@@ -62,13 +80,18 @@ export class AppConfig<T extends ZodRawShape> {
   public static getInstance<T extends ZodRawShape>(userSchema?: ZodObject<T>): AppConfig<T> {
     if (!AppConfig.instance) {
       if (!userSchema) {
-        throw new Error(
-          'User schema must be provided when creating the AppConfig instance for the first time'
+        throw new BootifyStateError(
+          'AppConfig has not been initialized. Call useConfig(schema) (or AppConfig.initialize) first.'
         )
       }
       AppConfig.instance = new AppConfig(userSchema)
     }
     return AppConfig.instance
+  }
+
+  /** Reset the singleton (tests / HMR). The next initialize() starts fresh. */
+  public static reset(): void {
+    AppConfig.instance = undefined as unknown as AppConfig<any>
   }
 
   /**
@@ -83,23 +106,22 @@ export class AppConfig<T extends ZodRawShape> {
   }
 
   private validateConfig(): FrameworkConfig & z.infer<ZodObject<T>> {
-    try {
-      const result = this.mergedSchema.safeParse(process.env)
+    const result = this.mergedSchema.safeParse(process.env)
 
-      if (!result.success) {
-        const formattedErrors = result.error.format()
-        const errorMessages = Object.entries(formattedErrors)
-          .filter(([key]) => key !== '_errors')
-          .map(([key, value]) => `- ${key}: ${(value as any)._errors.join(', ')}`)
-          .join('\n')
+    if (!result.success) {
+      const formattedErrors = result.error.format()
+      const errorMessages = Object.entries(formattedErrors)
+        .filter(([key]) => key !== '_errors')
+        .map(([key, value]) => `- ${key}: ${(value as any)._errors.join(', ')}`)
+        .join('\n')
 
-        throw new Error(`Configuration validation failed:\n${errorMessages}`)
-      }
-      return result.data as FrameworkConfig & z.infer<ZodObject<T>>
-    } catch (error) {
-      console.error(error instanceof Error ? error.message : 'Unknown configuration error')
-      process.exit(1)
+      throw new ConfigValidationError(
+        `Configuration validation failed:\n${errorMessages}`,
+        result.error.issues as ZodIssue[]
+      )
     }
+
+    return result.data as FrameworkConfig & z.infer<ZodObject<T>>
   }
 
   /**
@@ -141,14 +163,30 @@ export class AppConfig<T extends ZodRawShape> {
   private logConfig(): void {
     const configToLog = { ...this.config }
 
-    // Redact sensitive information
-    const sensitiveKeys = ['password', 'secret', 'key', 'token', 'database_url']
     Object.keys(configToLog).forEach((key) => {
-      if (sensitiveKeys.some((sensitive) => key.toLowerCase().includes(sensitive))) {
+      if (isSensitiveKey(key)) {
         configToLog[key as keyof typeof configToLog] = '*****' as any
       }
     })
 
     console.log('Loaded configuration:', configToLog)
   }
+}
+
+/**
+ * Typed identity helper for app configuration schemas. Pairs with
+ * `useConfig(schema)` / `app.config`.
+ */
+export function defineConfig<T extends ZodRawShape>(shape: T): ZodObject<T> {
+  return z.object(shape)
+}
+
+/** Initialize the application config (module-level alias for AppConfig.initialize). */
+export function useConfig<T extends ZodRawShape>(schema: ZodObject<T>): void {
+  AppConfig.initialize(schema)
+}
+
+/** Access the initialized app config. Throws BootifyStateError if useConfig was never called. */
+export function getConfig<T extends ZodRawShape>(): AppConfig<T> {
+  return AppConfig.getInstance<T>()
 }

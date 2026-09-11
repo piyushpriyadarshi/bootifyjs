@@ -1,5 +1,5 @@
 import { FastifyRequest, FastifyReply } from 'fastify'
-import { Logger } from '../logging'
+import type { ILogger } from '../logging'
 
 export const requestLoggerOnRequest = (
   req: FastifyRequest,
@@ -26,7 +26,7 @@ export const requestLoggerOnResponse = (
   done()
 }
 
-export const createRequestLoggerOnResponse = (logger: Logger) => {
+export const createRequestLoggerOnResponse = (logger: ILogger) => {
   return (req: FastifyRequest, reply: FastifyReply, done: Function) => {
     const payload = {
       requestId: req.id,
@@ -42,7 +42,7 @@ export const createRequestLoggerOnResponse = (logger: Logger) => {
       ipAddress: req.ip,
       //   headers: req.headers,
     }
-    logger.access(payload)
+    logger.info('access', payload)
     done()
   }
 }

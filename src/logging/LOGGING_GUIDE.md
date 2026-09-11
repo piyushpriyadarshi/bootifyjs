@@ -129,7 +129,7 @@ type LogContext = Record<string, any>;
 import { createBootify } from "bootifyjs";
 import { MyPinoAdapter } from "./my-pino-adapter";
 
-createBootify()
+createBootifyApp()
   .setServiceName("my-api")
   .useLogger((builder) =>
     builder.use(
@@ -173,7 +173,7 @@ createLogger().addTransport(new DatadogTransport()).build();
 ```typescript
 import { getLogger } from "bootifyjs/logging";
 
-// After createLogger().build() or createBootify().build()
+// After createLogger().build() or createBootifyApp().build()
 const logger = getLogger();
 logger.info("Hello world");
 ```

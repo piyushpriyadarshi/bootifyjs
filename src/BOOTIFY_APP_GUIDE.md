@@ -23,7 +23,7 @@ The original `createBootifyApp()` was too opinionated. `BootifyApp` gives you:
 import { createBootify } from "bootify";
 import { HealthController, TodoController } from "./controllers";
 
-const app = await createBootify()
+const app = await createBootifyApp()
   .setPort(8080)
   .useControllers([HealthController, TodoController])
   .start();
@@ -41,7 +41,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string(),
 });
 
-const { app, start } = await createBootify()
+const { app, start } = await createBootifyApp()
   .useConfig(envSchema)
   .setPort(8080)
   .setHostname("0.0.0.0")
@@ -60,7 +60,7 @@ await start();
 Set the server port.
 
 ```typescript
-createBootify().setPort(3000);
+createBootifyApp().setPort(3000);
 ```
 
 #### `setHostname(hostname: string)`
@@ -68,7 +68,7 @@ createBootify().setPort(3000);
 Set the server hostname.
 
 ```typescript
-createBootify().setHostname("0.0.0.0");
+createBootifyApp().setHostname("0.0.0.0");
 ```
 
 #### `setFastifyOptions(options: FastifyServerOptions)`
@@ -76,7 +76,7 @@ createBootify().setHostname("0.0.0.0");
 Set Fastify server options.
 
 ```typescript
-createBootify().setFastifyOptions({
+createBootifyApp().setFastifyOptions({
   logger: true,
   ignoreTrailingSlash: false,
   bodyLimit: 1048576, // 1MB
@@ -93,7 +93,7 @@ const schema = z.object({
   PORT: z.coerce.number(),
 });
 
-createBootify().useConfig(schema);
+createBootifyApp().useConfig(schema);
 ```
 
 #### `useControllers(controllers: Constructor[])`
@@ -101,7 +101,7 @@ createBootify().useConfig(schema);
 Register controllers.
 
 ```typescript
-createBootify().useControllers([
+createBootifyApp().useControllers([
   HealthController,
   UserController,
   ProductController,
@@ -115,7 +115,7 @@ createBootify().useControllers([
 Register a custom plugin.
 
 ```typescript
-createBootify().usePlugin(async (app) => {
+createBootifyApp().usePlugin(async (app) => {
   await app.register(cors, {
     origin: "*",
     methods: ["GET", "POST"],
@@ -132,7 +132,7 @@ const authMiddleware = async (request, reply) => {
   // Authentication logic
 };
 
-createBootify().useMiddleware(authMiddleware);
+createBootifyApp().useMiddleware(authMiddleware);
 ```
 
 #### `useMiddlewares(middlewares: FastifyMiddleware[])`
@@ -140,7 +140,7 @@ createBootify().useMiddleware(authMiddleware);
 Add multiple middlewares at once.
 
 ```typescript
-createBootify().useMiddlewares([
+createBootifyApp().useMiddlewares([
   corsMiddleware,
   authMiddleware,
   loggingMiddleware,
@@ -154,7 +154,7 @@ createBootify().useMiddlewares([
 Set a custom error handler.
 
 ```typescript
-createBootify().useErrorHandler((error, request, reply) => {
+createBootifyApp().useErrorHandler((error, request, reply) => {
   if (error instanceof CustomError) {
     reply.status(error.statusCode).send({
       error: error.message,
@@ -173,7 +173,7 @@ createBootify().useErrorHandler((error, request, reply) => {
 Run code before server starts.
 
 ```typescript
-createBootify().beforeStart(async (app) => {
+createBootifyApp().beforeStart(async (app) => {
   // Initialize database
   await database.connect();
 
@@ -189,7 +189,7 @@ createBootify().beforeStart(async (app) => {
 Run code after server starts.
 
 ```typescript
-createBootify().afterStart(async (app) => {
+createBootifyApp().afterStart(async (app) => {
   console.log("Server is ready!");
 
   // Start background jobs
@@ -204,7 +204,7 @@ createBootify().afterStart(async (app) => {
 Build the application without starting it.
 
 ```typescript
-const { app, start, logger } = await createBootify()
+const { app, start, logger } = await createBootifyApp()
   .setPort(3000)
   .useControllers([HealthController])
   .build();
@@ -221,7 +221,7 @@ await start();
 Build and start the application immediately.
 
 ```typescript
-await createBootify().setPort(3000).useControllers([HealthController]).start();
+await createBootifyApp().setPort(3000).useControllers([HealthController]).start();
 ```
 
 ## Complete Examples
@@ -232,7 +232,7 @@ await createBootify().setPort(3000).useControllers([HealthController]).start();
 import { createBootify } from "bootify";
 import { HealthController, UserController } from "./controllers";
 
-await createBootify()
+await createBootifyApp()
   .setPort(8080)
   .useControllers([HealthController, UserController])
   .start();
@@ -246,7 +246,7 @@ import cors from "@fastify/cors";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 
-const { app, start } = await createBootify()
+const { app, start } = await createBootifyApp()
   .setPort(8080)
 
   // Register CORS
@@ -286,7 +286,7 @@ import { createBootify } from "bootify";
 import { initDatabase } from "./database";
 import { initRedis } from "./redis";
 
-const { app, start } = await createBootify()
+const { app, start } = await createBootifyApp()
   .setPort(8080)
 
   // Initialize services before start
@@ -309,7 +309,7 @@ await start();
 import { createBootify } from "bootify";
 import { ZodError } from "zod";
 
-await createBootify()
+await createBootifyApp()
   .setPort(8080)
 
   .useErrorHandler((error, request, reply) => {
@@ -359,7 +359,7 @@ const envSchema = z.object({
   JWT_SECRET: z.string(),
 });
 
-const { app, start, logger } = await createBootify()
+const { app, start, logger } = await createBootifyApp()
   // Configuration
   .useConfig(envSchema)
   .setPort(Number(process.env.PORT))
@@ -451,7 +451,7 @@ const appSchema = z.object({
   REDIS_PORT: z.coerce.number().default(6379),
 });
 
-const { app, start, logger } = await createBootify()
+const { app, start, logger } = await createBootifyApp()
   // Configuration
   .useConfig(appSchema)
   .setPort(Number(process.env.PORT) || 8000)
@@ -559,7 +559,7 @@ await start();
 
 ## Migration Guide
 
-### From `createBootifyApp()` to `createBootify()`
+### From `createBootifyApp()` to `createBootifyApp()`
 
 **Before:**
 
@@ -577,7 +577,7 @@ await start();
 **After:**
 
 ```typescript
-const { app, start } = await createBootify()
+const { app, start } = await createBootifyApp()
   .setPort(8080)
   .useControllers([HealthController, TodoController])
   .useMiddlewares([corsMiddleware, authMiddleware])
@@ -600,7 +600,7 @@ await start();
 ### 1. Use Lifecycle Hooks for Initialization
 
 ```typescript
-createBootify()
+createBootifyApp()
   .beforeStart(async () => {
     // Initialize database, Redis, etc.
   })
@@ -612,7 +612,7 @@ createBootify()
 ### 2. Group Related Plugins
 
 ```typescript
-createBootify()
+createBootifyApp()
   .usePlugin(async (app) => {
     // All security-related plugins together
     await app.register(helmet);
@@ -634,7 +634,7 @@ createBootify()
 ### 3. Use Environment Variables
 
 ```typescript
-createBootify()
+createBootifyApp()
   .setPort(Number(process.env.PORT) || 3000)
   .setHostname(process.env.HOST || "0.0.0.0");
 ```
@@ -642,7 +642,7 @@ createBootify()
 ### 4. Handle Graceful Shutdown
 
 ```typescript
-const { app } = await createBootify().build();
+const { app } = await createBootifyApp().build();
 
 process.on("SIGTERM", async () => {
   await app.close();
@@ -652,7 +652,7 @@ process.on("SIGTERM", async () => {
 
 ## Comparison
 
-| Feature             | `createBootifyApp()` | `createBootify()` |
+| Feature             | `createBootifyApp()` | `createBootifyApp()` |
 | ------------------- | -------------------- | ----------------- |
 | Flexibility         | ❌ Limited           | ✅ Full control   |
 | Plugin Order        | ❌ Fixed             | ✅ Custom         |
@@ -666,7 +666,7 @@ process.on("SIGTERM", async () => {
 
 `BootifyApp` provides the flexibility you need for production applications while maintaining the simplicity of Bootify's decorator-based approach.
 
-**Use `createBootify()` when you need:**
+**Use `createBootifyApp()` when you need:**
 
 - Full control over initialization
 - Custom plugin registration order

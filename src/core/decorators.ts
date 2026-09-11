@@ -1,55 +1,41 @@
 import { FastifyReply, FastifyRequest } from 'fastify'
 import 'reflect-metadata'
 import { ZodSchema } from 'zod'
-import { FRAMEWORK_METADATA_KEYS } from '../constants'
-import { registeredComponents } from './component-registry'
-import { ComponentOptions, container, Scope } from './di-container'
+import { container, Scope, METADATA_KEYS } from './di-container'
+import type { ComponentOptions } from './di-container'
 
-// --- Metadata Keys ---
-export const METADATA_KEYS = {
-  controllerPrefix: FRAMEWORK_METADATA_KEYS.CONTROLLER_PREFIX,
-  routes: FRAMEWORK_METADATA_KEYS.ROUTES,
-  validationSchema: FRAMEWORK_METADATA_KEYS.VALIDATION_SCHEMA,
-  paramTypes: FRAMEWORK_METADATA_KEYS.PARAM_TYPES,
-  middleware: FRAMEWORK_METADATA_KEYS.MIDDLEWARE,
-  autowiredProperties: FRAMEWORK_METADATA_KEYS.AUTOWIRED_PROPERTIES,
-  autowiredParams: FRAMEWORK_METADATA_KEYS.AUTOWIRED_PARAMS,
-  swaggerMetadata: 'swagger:metadata',
-}
+// Re-exported for backward compatibility — the canonical definition lives in
+// di-container.ts to keep the di-container ↔ decorators import graph acyclic.
+export { METADATA_KEYS }
 
 export type FastifyMiddleware = (
   request: FastifyRequest,
   reply: FastifyReply
 ) => Promise<void> | void
 
-// export interface ComponentOptions {
-//   scope?: Scope
-//   /**
-//    * An array of tokens that this class should be bound to in the DI container.
-//    * Allows this class to be injected using an interface or symbol.
-//    */
-//   bindTo?: any[]
-// }
 export const Component = (options: ComponentOptions = {}): ClassDecorator => {
   return (target: any) => {
     const scope = options.scope || Scope.SINGLETON
 
-    // 1. Register the class by its own type (as before)
-    container.register(target, { useClass: target, scope: scope as any })
+    // 1. Register the class by its own type. override:true keeps decoration
+    //    idempotent across module re-evaluation (tests/HMR).
+    container.register(target, {
+      useClass: target,
+      scope: scope as any,
+      eager: options.eager,
+      override: true,
+    })
 
-    // 2. Add to the global component registry (as before)
-    registeredComponents.add(target)
-
-    // 3. NEW: Automatically handle the interface/token bindings
+    // 3. Automatically handle the interface/token bindings
     if (options.bindTo && Array.isArray(options.bindTo)) {
-      console.log(
-        `[DI] Binding '${target.name}' to tokens: [${options.bindTo
-          .map((t) => String(t))
-          .join(', ')}]`
-      )
       for (const token of options.bindTo) {
         // Map the abstract token to this concrete class
-        container.register(token, { useClass: target, scope: scope as any })
+        container.register(token, {
+          useClass: target,
+          scope: scope as any,
+          eager: options.eager,
+          override: true,
+        })
       }
     }
   }
@@ -60,14 +46,28 @@ export const Service = (options: ComponentOptions = {}): ClassDecorator => Compo
 export const Repository = (options: ComponentOptions = {}): ClassDecorator => Component(options)
 
 export const Controller =
-  (prefix: string = ''): ClassDecorator =>
+  (prefix: string = '', options: ComponentOptions = {}): ClassDecorator =>
     (target: any) => {
       Reflect.defineMetadata(METADATA_KEYS.controllerPrefix, prefix, target)
-      container.register(target, { useClass: target, scope: Scope.SINGLETON as any })
+      container.register(target, {
+        useClass: target,
+        scope: options.scope || Scope.SINGLETON,
+        eager: options.eager,
+        override: true,
+      })
+      if (options.bindTo && Array.isArray(options.bindTo)) {
+        for (const token of options.bindTo) {
+          container.register(token, {
+            useClass: target,
+            scope: options.scope || Scope.SINGLETON,
+            override: true,
+          })
+        }
+      }
     }
 
 // --- Method Decorators ---
-type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS'
+type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS' | 'HEAD' | 'OPTIONS'
 
 const createRouteDecorator =
   (method: HttpMethod) =>
@@ -88,14 +88,20 @@ export const Post = createRouteDecorator('POST')
 export const Put = createRouteDecorator('PUT')
 export const Delete = createRouteDecorator('DELETE')
 export const Patch = createRouteDecorator('PATCH')
+export const Head = createRouteDecorator('HEAD')
+export const Options = createRouteDecorator('OPTIONS')
 
 // --- Parameter Decorators ---
 const createParamDecorator =
   (type: string, name?: string) =>
     (target: any, propertyKey: string | symbol, parameterIndex: number) => {
-      const params = Reflect.getMetadata(METADATA_KEYS.paramTypes, target, propertyKey) || []
-      params[parameterIndex] = { type, name }
-      Reflect.defineMetadata(METADATA_KEYS.paramTypes, params, target, propertyKey)
+      // Metadata lives on target.constructor (the class) — same owner as route
+      // metadata — and always records its index so sparse layouts resolve.
+      const owner = target.constructor
+      const params =
+        Reflect.getMetadata(METADATA_KEYS.paramTypes, owner, propertyKey) || []
+      params[parameterIndex] = { type, name, index: parameterIndex }
+      Reflect.defineMetadata(METADATA_KEYS.paramTypes, params, owner, propertyKey)
     }
 
 export const Body = () => createParamDecorator('body')
@@ -103,6 +109,59 @@ export const Query = (name?: string) => createParamDecorator('query', name)
 export const Param = (name: string) => createParamDecorator('param', name)
 export const Req = () => createParamDecorator('request')
 export const Res = () => createParamDecorator('reply')
+export const Reply = Res
+
+/**
+ * Requires a verified token for the decorated route(s).
+ * Works on a method (single route) or a class (all routes).
+ * Framework wiring: `createBootifyApp().enableAuth()` registers the middleware
+ * this decorator consumes — without it, build() fails fast.
+ */
+export const UseAuth = (): MethodDecorator & ClassDecorator => {
+  return (target: any, propertyKey?: string | symbol) => {
+    if (propertyKey) {
+      // method-level metadata lives on the class — same owner as routes
+      Reflect.defineMetadata(METADATA_KEYS.authRequired, true, target.constructor, propertyKey)
+    } else {
+      Reflect.defineMetadata(METADATA_KEYS.authRequired, true, target)
+    }
+  }
+}
+
+/**
+ * Opts a single route out of a class-level @UseAuth(). Stores an explicit
+ * `false` — the router treats it as an override of the class-level metadata.
+ */
+export const Public = (): MethodDecorator & ClassDecorator => {
+  return (target: any, propertyKey?: string | symbol) => {
+    if (propertyKey) {
+      // method-level: explicit `false` overrides a class-level @UseAuth
+      Reflect.defineMetadata(METADATA_KEYS.authRequired, false, target.constructor, propertyKey)
+    } else {
+      // class-level: every route in the controller is public
+      Reflect.defineMetadata(METADATA_KEYS.authRequired, false, target)
+    }
+  }
+}
+
+/**
+ * Restricts the decorated route(s) to the given roles.
+ * Implies @UseAuth(). Works on a method or a class.
+ */
+export const Roles = (...roles: string[]): MethodDecorator & ClassDecorator => {
+  return (target: any, propertyKey?: string | symbol) => {
+    if (propertyKey) {
+      Reflect.defineMetadata(METADATA_KEYS.authRequired, true, target.constructor, propertyKey)
+      Reflect.defineMetadata(METADATA_KEYS.authRoles, roles, target.constructor, propertyKey)
+    } else {
+      Reflect.defineMetadata(METADATA_KEYS.authRequired, true, target)
+      Reflect.defineMetadata(METADATA_KEYS.authRoles, roles, target)
+    }
+  }
+}
+
+/** Injects the verified token payload (request.user) into the parameter. */
+export const CurrentUser = () => createParamDecorator('currentUser')
 
 export interface ValidationDecoratorOptions {
   body?: ZodSchema<any>
@@ -193,62 +252,6 @@ export const UseMiddleware = (
     }
   }
 }
-
-// export const Autowired = (): PropertyDecorator => {
-//   return (target: any, propertyKey: string | symbol) => {
-//     // Get the type of the property being decorated (e.g., TodoService class)
-//     const propertyType = Reflect.getMetadata('design:type', target, propertyKey)
-
-//     if (!propertyType) {
-//       throw new Error(
-//         `Could not resolve type for property '${String(propertyKey)}' on class '${
-//           target.constructor.name
-//         }'. Make sure 'emitDecoratorMetadata' is true in your tsconfig.json and the type is not a primitive or interface.`
-//       )
-//     }
-
-//     // Get existing autowired properties for the target class or initialize a new array
-//     const properties =
-//       Reflect.getMetadata(METADATA_KEYS.autowiredProperties, target.constructor) || []
-
-//     properties.push({
-//       propertyKey,
-//       type: propertyType,
-//     })
-
-//     // Save the updated list of properties back to the class metadata
-//     Reflect.defineMetadata(METADATA_KEYS.autowiredProperties, properties, target.constructor)
-//   }
-// }
-
-// export const Autowired = (token?: any): any => {
-//   return (target: any, propertyKey: string | symbol | undefined, parameterIndex?: number) => {
-//     // Check if it's being used as a Parameter Decorator
-//     if (typeof parameterIndex === 'number') {
-//       const constructorParams = Reflect.getMetadata('autowired:params', target) || []
-//       constructorParams[parameterIndex] = token
-//       Reflect.defineMetadata('autowired:params', constructorParams, target)
-//       return
-//     }
-
-//     // Existing Property Decorator logic
-//     const propertyType = propertyKey
-//       ? Reflect.getMetadata('design:type', target, propertyKey)
-//       : undefined
-//     if (!propertyType) {
-//       /* ... error handling ... */
-//     }
-
-//     const properties =
-//       Reflect.getMetadata(METADATA_KEYS.autowiredProperties, target.constructor) || []
-//     properties.push({
-//       propertyKey,
-//       // Use the explicit token if provided, otherwise fall back to the type
-//       token: token || propertyType,
-//     })
-//     Reflect.defineMetadata(METADATA_KEYS.autowiredProperties, properties, target.constructor)
-//   }
-// }
 
 export const Autowired = (token?: any): any => {
   return (target: any, propertyKey: string | symbol | undefined, parameterIndex?: number) => {

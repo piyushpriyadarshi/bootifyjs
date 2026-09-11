@@ -5,7 +5,7 @@
 
 import { FastifyInstance } from 'fastify';
 import { container } from '../../core';
-import { Logger } from '../../logging';
+import { BaseLogger } from '../../logging';
 import {
   ApiKeyStrategy,
   AuthContext,
@@ -212,8 +212,7 @@ export function registerJWTAuthRoutes(
       console.log('JWT Login result:', result);
 
 
-      // const logger: Logger = container.resolve(LOGGER_TOKEN);
-      const logger: Logger = container.resolve(Logger);
+      const logger: BaseLogger = container.resolve(BaseLogger);
       logger.info('JWT Login result:', result);
 
       if (result.success && result.tokens) {

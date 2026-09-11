@@ -1,6 +1,7 @@
 import { Autowired, Service } from '../../core'
 import { RequestContextService } from '../../core/request-context.service'
-import { Logger } from './logger'
+import { BaseLogger } from './base-logger'
+import type { ILogger } from './interfaces'
 
 export interface TraceContext {
   traceId: string
@@ -24,8 +25,8 @@ export interface SpanOptions {
 @Service()
 export class TracingService {
   private serviceName = 'bootify-service'
-  @Autowired(Logger)
-  private logger!: Logger
+  @Autowired(BaseLogger)
+  private logger!: ILogger
 
   // Get current trace context from request context
   getCurrentContext(): TraceContext | undefined {
@@ -111,7 +112,7 @@ export class TracingService {
     //   events: [],
     //   error: error?.message,
     // })
-    this.logger.span({
+    this.logger.info('span', {
       traceId: traceContext.traceId,
       spanId: traceContext.spanId,
       parentSpanId: traceContext.parentSpanId,

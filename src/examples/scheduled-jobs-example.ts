@@ -7,7 +7,7 @@
  * Note: Install node-cron for cron expressions: npm install node-cron
  */
 import 'reflect-metadata'
-import { Scheduled, Service, createBootify } from '../index'
+import { Scheduled, Service, createBootifyApp } from '../index'
 
 // Example 1: Simple cron-based cleanup job
 @Service()
@@ -74,11 +74,13 @@ async function main() {
     console.log('Starting Scheduled Jobs Example...\n')
 
     // Create and start the app
-    const bootify = createBootify()
+    const bootify = createBootifyApp()
         .setPort(3000)
         .useScheduler(true)
 
-    const { app, start, scheduler } = await bootify.build()
+    await bootify.build()
+    const app = bootify.handle
+    const scheduler = bootify.scheduler
 
     // Add a simple route to check scheduler status
     app.get('/scheduler/status', async () => {
@@ -97,7 +99,7 @@ async function main() {
         }
     })
 
-    await start()
+    await bootify.start()
 
     console.log('\n📋 Available endpoints:')
     console.log('  GET  /scheduler/status - View all job statuses')

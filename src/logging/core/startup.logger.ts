@@ -1,7 +1,8 @@
-import * as os from 'os'
 import { DEFAULT_SERVER_PORT } from '../../constants'
 import { Autowired, Service } from '../../core'
-import { Logger } from './logger'
+import { BaseLogger } from './base-logger'
+import type { ILogger } from './interfaces'
+import { DefaultSystemInfoProvider, SystemInfoProvider } from './system-info'
 
 interface StartupLogPayload {
   component: string
@@ -14,8 +15,11 @@ interface StartupLogPayload {
 export class StartupLoggerService {
   private startupStartTime: number
   private componentTimings: Map<string, number> = new Map()
-  @Autowired(Logger)
-  private readonly logger!: Logger
+  @Autowired(BaseLogger)
+  private readonly logger!: ILogger
+
+  /** Injectable system facts (tests provide static data). */
+  public systemInfoProvider: SystemInfoProvider = new DefaultSystemInfoProvider()
   constructor() {
     this.startupStartTime = Date.now()
   }
@@ -29,10 +33,10 @@ export class StartupLoggerService {
       phase: 'starting',
       environment: process.env.NODE_ENV || 'development',
       nodeVersion: process.version,
-      platform: os.platform(),
-      arch: os.arch(),
-      memory: this.formatMemory(os.totalmem()),
-      cpus: os.cpus().length,
+      platform: this.systemInfoProvider.get().platform,
+      arch: this.systemInfoProvider.get().arch,
+      memory: this.formatMemory(this.systemInfoProvider.get().totalMemoryBytes),
+      cpus: this.systemInfoProvider.get().cpuCount,
     })
   }
 
@@ -82,7 +86,7 @@ export class StartupLoggerService {
     // }
   }
 
-  logStartupSummary(port?: number, host?: string): void {
+  logStartupSummary(port?: number, host?: string, options: { docsPath?: string } = {}): void {
     const totalDuration = Date.now() - this.startupStartTime
     const actualPort = port || process.env.PORT || DEFAULT_SERVER_PORT
     const actualHost = host || 'localhost'
@@ -95,7 +99,7 @@ export class StartupLoggerService {
       `📦 Node.js: ${process.version}`,
       `💾 Memory usage: ${this.formatMemory(process.memoryUsage().heapUsed)}`,
       `🌐 Server: http://${actualHost}:${actualPort}`,
-      `📚 API Docs: http://${actualHost}:${actualPort}/api-docs`,
+      ...(options.docsPath ? [`📚 API Docs: http://${actualHost}:${actualPort}${options.docsPath}`] : []),
       '─'.repeat(50),
       '',
     ].join('\n')
@@ -104,7 +108,7 @@ export class StartupLoggerService {
   }
 
   private createStartupBanner(): string {
-    const version = this.getVersion()
+    const version = this.systemInfoProvider.get().appVersion
     return `
   ____              _   _  __       _ ____  
  |  _ \\            | | (_)/ _|     | / ___| 
@@ -117,34 +121,6 @@ export class StartupLoggerService {
 
  :: BootifyJS Framework ::        (v${version})
 `
-  }
-
-  private getVersion(): string {
-    try {
-      // Try to read from package.json
-      const fs = require('fs')
-      const path = require('path')
-
-      // Look for package.json in common locations
-      const possiblePaths = [
-        path.join(process.cwd(), 'package.json'),
-        path.join(__dirname, '../../../package.json'),
-        path.join(__dirname, '../../package.json'),
-      ]
-
-      for (const pkgPath of possiblePaths) {
-        if (fs.existsSync(pkgPath)) {
-          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
-          if (pkg.version) {
-            return pkg.version
-          }
-        }
-      }
-    } catch (error) {
-      // Fallback to environment variable or default
-    }
-
-    return process.env.SERVICE_VERSION || '1.0.0'
   }
 
   private formatMemory(bytes: number): string {

@@ -15,6 +15,11 @@ export { JwtStrategy } from './strategies/JwtStrategy';
 
 // Token storage implementations
 export { RedisTokenStorage } from './storage/RedisTokenStorage';
+export { InMemoryTokenStorage } from './storage/in-memory-token-storage';
+
+// Opinionated builder wiring (createBootifyApp().enableAuth())
+export { setupAuth } from './builder';
+export type { EnableAuthOptions, AuthHandle } from './builder';
 
 // Middleware
 // export { AuthMiddleware } from './middleware/AuthMiddleware'; // Currently commented out
@@ -28,6 +33,7 @@ export type { JwtStrategyConfig } from './strategies/JwtStrategy';
 import { AuthManager } from './AuthManager';
 import { ApiKeyStrategy } from './strategies/ApiKeyStrategy';
 import { JwtStrategy } from './strategies/JwtStrategy';
+import type { JwtStrategyConfig } from './strategies/JwtStrategy';
 // import { AuthMiddleware } from './middleware/AuthMiddleware'; // Currently commented out
 
 /**
@@ -45,6 +51,7 @@ export class AuthSetup {
       refreshTokenExpiry?: string | number;
       userProvider: (userId: string) => Promise<any>;
       credentialValidator?: (credentials: any) => Promise<any>;
+      payloadBuilder?: JwtStrategyConfig['payloadBuilder'];
     };
     apiKeyConfig?: {
       tokenStorage: any;
@@ -95,6 +102,7 @@ export class AuthSetup {
     refreshTokenExpiry?: string | number;
     userProvider: (userId: string) => Promise<any>;
     credentialValidator?: (credentials: any) => Promise<any>;
+    payloadBuilder?: JwtStrategyConfig['payloadBuilder'];
     tokenStorage?: any;
   }) {
     const authManager = new AuthManager({

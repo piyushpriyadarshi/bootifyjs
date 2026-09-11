@@ -1,9 +1,9 @@
 /**
  * SchedulerService - Manages scheduled job execution
  */
-import { registeredComponents } from '../core/component-registry'
 import { Service } from '../core/decorators'
 import { container } from '../core/di-container'
+import type { Constructor } from '../core/di-container'
 import { getLogger, ILogger } from '../logging'
 import { SCHEDULED_METADATA_KEY } from './scheduled.decorator'
 import { JobStatus, ScheduledJobMetadata, SchedulerStats } from './scheduler.types'
@@ -24,6 +24,9 @@ export class SchedulerService {
     private isStarted = false
     private nodeCron: any = null
 
+    /** Optional observer for job failures (in addition to logger output). */
+    public onJobError?: (jobName: string, error: Error) => void
+
     private get logger(): ILogger {
         try {
             return getLogger()
@@ -39,9 +42,11 @@ export class SchedulerService {
     }
 
     /**
-     * Initialize and start all scheduled jobs
+     * Initialize and start all scheduled jobs.
+     * @param components Explicit component list (tests / advanced wiring).
+     *                   Defaults to scanning the DI container.
      */
-    async start(): Promise<void> {
+    async start(components?: Constructor[]): Promise<void> {
         if (this.isStarted) {
             this.logger.warn('Scheduler already started')
             return
@@ -54,8 +59,8 @@ export class SchedulerService {
             this.logger.warn('node-cron not installed. Cron expressions will not work. Install with: npm install node-cron')
         }
 
-        // Discover all scheduled jobs from registered components
-        this.discoverJobs()
+        // Discover all scheduled jobs
+        this.discoverJobs(components)
 
         // Start all jobs
         Array.from(this.jobs.entries()).forEach(([_name, job]) => {
@@ -64,6 +69,13 @@ export class SchedulerService {
 
         this.isStarted = true
         this.logger.info('Scheduler started', { totalJobs: this.jobs.size })
+    }
+
+    /**
+     * Alias for stop() — consistent lifecycle naming across services.
+     */
+    async dispose(): Promise<void> {
+        await this.stop()
     }
 
     /**
@@ -180,8 +192,10 @@ export class SchedulerService {
         return this.jobs.get(jobName)?.status
     }
 
-    private discoverJobs(): void {
-        const components = Array.from(registeredComponents)
+    private discoverJobs(explicitComponents?: Constructor[]): void {
+        // Single source of truth: the DI container (component-registry was
+        // a duplicate global and has been removed).
+        const components = explicitComponents ?? container.getRegisteredComponents()
 
         for (let i = 0; i < components.length; i++) {
             const componentClass = components[i]
@@ -190,10 +204,13 @@ export class SchedulerService {
 
             if (scheduledMethods.length === 0) continue
 
-            // Resolve the instance from DI container
+            // Resolve the instance: container registration when available,
+            // direct instantiation for explicitly provided classes (tests).
             let instance: any
             try {
-                instance = container.resolve(componentClass)
+                instance = container.isRegistered(componentClass)
+                    ? container.resolve(componentClass)
+                    : new componentClass()
             } catch (error) {
                 this.logger.error(`Failed to resolve component`, error as Error, { component: componentClass.name })
                 continue
@@ -257,8 +274,6 @@ export class SchedulerService {
                     this.executeJob(job)
                 }, cronOptions)
 
-                // Calculate next run
-                job.status.nextRun = this.getNextCronRun(options.cron)
             } catch (error: any) {
                 this.logger.error('Invalid cron expression', error, { jobName: job.status.name })
                 job.status.status = 'error'
@@ -325,9 +340,7 @@ export class SchedulerService {
                 job.status.lastError = undefined
 
                 // Update next run time
-                if (options.cron) {
-                    job.status.nextRun = this.getNextCronRun(options.cron)
-                } else if (options.interval) {
+                if (options.interval) {
                     job.status.nextRun = new Date(Date.now() + options.interval)
                 }
 
@@ -343,6 +356,7 @@ export class SchedulerService {
                     job.status.errorCount++
                     job.status.lastError = error.message
                     job.status.status = 'error'
+                    this.onJobError?.(job.status.name, error)
                 } else {
                     // Wait before retry
                     await new Promise(resolve => setTimeout(resolve, options.retryDelay || 1000))
@@ -358,10 +372,4 @@ export class SchedulerService {
         }
     }
 
-    private getNextCronRun(cronExpression: string): Date | undefined {
-        // Simple approximation - for accurate next run, would need cron-parser
-        // This is a placeholder that returns undefined
-        // Users can install cron-parser for accurate next run times
-        return undefined
-    }
 }

@@ -1,13 +1,15 @@
-import { Autowired, Controller, Get } from '../../core/decorators'
-import { Logger } from '../../logging'
+import { FastifyReply, FastifyRequest } from 'fastify'
+import { BaseLogger } from '../../logging'
+import { Autowired } from '../../core/decorators'
+import { Controller, Get } from '../../core/decorators'
 
-@Controller('/api')
+@Controller('/health')
 export class HealthController {
-  @Autowired(Logger)
-  private logger!: Logger
+  @Autowired(BaseLogger)
+  private logger!: BaseLogger
 
-  @Get('/health')
-  getHealth() {
+  @Get()
+  check() {
     this.logger.info('Health check')
     return { status: 'ok', timestamp: new Date().toISOString() }
   }

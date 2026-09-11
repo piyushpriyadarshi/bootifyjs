@@ -1,7 +1,8 @@
-import * as os from 'os'
 import { DEFAULT_SERVER_PORT } from '../../constants'
 import { Autowired, Service } from '../../core'
-import { Logger } from './logger'
+import { BaseLogger } from './base-logger'
+import type { ILogger } from './interfaces'
+import { DefaultSystemInfoProvider, SystemInfoProvider } from './system-info'
 
 // ANSI color codes
 const colors = {
@@ -28,8 +29,11 @@ export class StreamingStartupLogger {
     private showColors: boolean
     private indent = '  '
 
-    @Autowired(Logger)
-    private readonly logger!: Logger
+    @Autowired(BaseLogger)
+    private readonly logger!: ILogger
+
+    /** Injectable system facts (tests provide static data). */
+    public systemInfoProvider: SystemInfoProvider = new DefaultSystemInfoProvider()
 
     constructor() {
         this.startupStartTime = Date.now()
@@ -39,7 +43,7 @@ export class StreamingStartupLogger {
     // ============ Public API ============
 
     public logStartupBanner(): void {
-        const version = this.getVersion()
+        const version = this.systemInfoProvider.get().appVersion
         const banner = `
   ____              _   _  __       _ ____  
  |  _ \\            | | (_)/ _|     | / ___| 
@@ -56,8 +60,8 @@ export class StreamingStartupLogger {
 
         // Log startup info
         const timestamp = new Date().toISOString()
-        console.log(`${this.colorize('Starting BootifyJS Application', colors.bright)} ${this.colorize(`on ${os.hostname()}`, colors.dim)}`)
-        console.log(`${this.colorize('Started by', colors.dim)} ${os.userInfo().username} ${this.colorize('in', colors.dim)} ${process.cwd()}`)
+        console.log(`${this.colorize('Starting BootifyJS Application', colors.bright)} ${this.colorize(`on ${this.systemInfoProvider.get().hostname}`, colors.dim)}`)
+        console.log(`${this.colorize('Started by', colors.dim)} ${this.systemInfoProvider.get().username} ${this.colorize('in', colors.dim)} ${this.systemInfoProvider.get().cwd}`)
         console.log(`${this.colorize('The following profiles are active:', colors.dim)} ${this.colorize(process.env.NODE_ENV || 'development', colors.cyan)}`)
         console.log('')
     }
@@ -120,7 +124,7 @@ export class StreamingStartupLogger {
         console.log(`${this.colorize('─'.repeat(60), colors.gray)}`)
     }
 
-    public logStartupSummary(port?: number, host?: string): void {
+    public logStartupSummary(port?: number, host?: string, options: { docsPath?: string } = {}): void {
         const totalDuration = Date.now() - this.startupStartTime
         const seconds = (totalDuration / 1000).toFixed(3)
         const actualPort = port || process.env.PORT || DEFAULT_SERVER_PORT
@@ -133,7 +137,9 @@ export class StreamingStartupLogger {
         // Server info
         console.log(`${this.colorize('Server:', colors.dim)}`)
         console.log(`${this.indent}${this.colorize('•', colors.blue)} HTTP: ${this.colorize(`http://${actualHost}:${actualPort}`, colors.bright + colors.cyan)}`)
-        console.log(`${this.indent}${this.colorize('•', colors.blue)} Docs: ${this.colorize(`http://${actualHost}:${actualPort}/api-docs`, colors.cyan)}`)
+        if (options.docsPath) {
+            console.log(`${this.indent}${this.colorize('•', colors.blue)} Docs: ${this.colorize(`http://${actualHost}:${actualPort}${options.docsPath}`, colors.cyan)}`)
+        }
         console.log('')
 
         // System info
@@ -141,7 +147,7 @@ export class StreamingStartupLogger {
         console.log(`${this.colorize('System:', colors.dim)}`)
         console.log(`${this.indent}${this.colorize('•', colors.blue)} Node.js: ${this.colorize(process.version, colors.cyan)}`)
         console.log(`${this.indent}${this.colorize('•', colors.blue)} Memory: ${this.colorize(this.formatMemory(memUsage.heapUsed), colors.cyan)} / ${this.formatMemory(memUsage.heapTotal)}`)
-        console.log(`${this.indent}${this.colorize('•', colors.blue)} CPUs: ${this.colorize(String(os.cpus().length), colors.cyan)}`)
+        console.log(`${this.indent}${this.colorize('•', colors.blue)} CPUs: ${this.colorize(String(this.systemInfoProvider.get().cpuCount), colors.cyan)}`)
         console.log('')
 
         console.log(`${this.colorize('═'.repeat(60), colors.gray)}`)
@@ -162,32 +168,6 @@ export class StreamingStartupLogger {
             return text
         }
         return `${color}${text}${colors.reset}`
-    }
-
-    private getVersion(): string {
-        try {
-            const fs = require('fs')
-            const path = require('path')
-
-            const possiblePaths = [
-                path.join(process.cwd(), 'package.json'),
-                path.join(__dirname, '../../../package.json'),
-                path.join(__dirname, '../../package.json'),
-            ]
-
-            for (const pkgPath of possiblePaths) {
-                if (fs.existsSync(pkgPath)) {
-                    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
-                    if (pkg.version) {
-                        return pkg.version
-                    }
-                }
-            }
-        } catch (error) {
-            // Fallback
-        }
-
-        return process.env.SERVICE_VERSION || '1.0.0'
     }
 
     private formatMemory(bytes: number): string {

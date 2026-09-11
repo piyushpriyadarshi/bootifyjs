@@ -190,6 +190,21 @@ export const defaultBufferedEventConfig: BufferedEventConfig = {
 };
 
 /**
+ * User-supplied config: every field optional, nested sections deep-optional.
+ */
+export type BufferedEventConfigInput = Omit<
+  Partial<BufferedEventConfig>,
+  'monitoring' | 'memoryLimits' | 'performanceLimits' | 'reliabilityLimits'
+> & {
+  memoryLimits?: Partial<MemoryLimits>;
+  performanceLimits?: Partial<PerformanceLimits>;
+  reliabilityLimits?: Partial<ReliabilityLimits>;
+  monitoring?: Partial<Omit<MonitoringConfig, 'alertThresholds'>> & {
+    alertThresholds?: Partial<AlertThresholds>;
+  };
+};
+
+/**
  * Configuration validator
  */
 export class BufferedEventConfigValidator {
@@ -199,23 +214,23 @@ export class BufferedEventConfigValidator {
   static validate(config: Partial<BufferedEventConfig>): string[] {
     const errors: string[] = [];
 
-    if (config.workerCount && (config.workerCount < 1 || config.workerCount > 20)) {
+    if (config.workerCount !== undefined && (config.workerCount < 1 || config.workerCount > 20)) {
       errors.push('workerCount must be between 1 and 20');
     }
 
-    if (config.maxQueueSize && config.maxQueueSize < 100) {
+    if (config.maxQueueSize !== undefined && config.maxQueueSize < 100) {
       errors.push('maxQueueSize must be at least 100');
     }
 
-    if (config.maxEventSize && config.maxEventSize < 1024) {
+    if (config.maxEventSize !== undefined && config.maxEventSize < 1024) {
       errors.push('maxEventSize must be at least 1KB');
     }
 
-    if (config.maxMemoryMB && config.maxMemoryMB < 10) {
+    if (config.maxMemoryMB !== undefined && config.maxMemoryMB < 10) {
       errors.push('maxMemoryMB must be at least 10MB');
     }
 
-    if (config.retryAttempts && (config.retryAttempts < 0 || config.retryAttempts > 10)) {
+    if (config.retryAttempts !== undefined && (config.retryAttempts < 0 || config.retryAttempts > 10)) {
       errors.push('retryAttempts must be between 0 and 10');
     }
 
@@ -229,7 +244,7 @@ export class BufferedEventConfigValidator {
   /**
    * Merge user config with defaults
    */
-  static mergeWithDefaults(userConfig: Partial<BufferedEventConfig>): BufferedEventConfig {
+  static mergeWithDefaults(userConfig: BufferedEventConfigInput): BufferedEventConfig {
     return {
       ...defaultBufferedEventConfig,
       ...userConfig,
@@ -262,29 +277,30 @@ export class BufferedEventConfigValidator {
  */
 export class BufferedEventConfigLoader {
   /**
-   * Load configuration from environment variables
+   * Load configuration from environment variables.
+   * @param env Source of env values — injectable for tests. Defaults to process.env.
    */
-  static fromEnvironment(): Partial<BufferedEventConfig> {
+  static fromEnvironment(env: Record<string, string | undefined> = process.env): Partial<BufferedEventConfig> {
     const config: Partial<BufferedEventConfig> = {};
 
-    if (process.env.BUFFERED_EVENTS_ENABLED) {
-      config.enabled = process.env.BUFFERED_EVENTS_ENABLED === 'true';
+    if (env.BUFFERED_EVENTS_ENABLED) {
+      config.enabled = env.BUFFERED_EVENTS_ENABLED === 'true';
     }
 
-    if (process.env.BUFFERED_EVENTS_WORKER_COUNT) {
-      config.workerCount = parseInt(process.env.BUFFERED_EVENTS_WORKER_COUNT, 10);
+    if (env.BUFFERED_EVENTS_WORKER_COUNT) {
+      config.workerCount = parseInt(env.BUFFERED_EVENTS_WORKER_COUNT, 10);
     }
 
-    if (process.env.BUFFERED_EVENTS_MAX_QUEUE_SIZE) {
-      config.maxQueueSize = parseInt(process.env.BUFFERED_EVENTS_MAX_QUEUE_SIZE, 10);
+    if (env.BUFFERED_EVENTS_MAX_QUEUE_SIZE) {
+      config.maxQueueSize = parseInt(env.BUFFERED_EVENTS_MAX_QUEUE_SIZE, 10);
     }
 
-    if (process.env.BUFFERED_EVENTS_MAX_MEMORY_MB) {
-      config.maxMemoryMB = parseInt(process.env.BUFFERED_EVENTS_MAX_MEMORY_MB, 10);
+    if (env.BUFFERED_EVENTS_MAX_MEMORY_MB) {
+      config.maxMemoryMB = parseInt(env.BUFFERED_EVENTS_MAX_MEMORY_MB, 10);
     }
 
-    if (process.env.BUFFERED_EVENTS_RETRY_ATTEMPTS) {
-      config.retryAttempts = parseInt(process.env.BUFFERED_EVENTS_RETRY_ATTEMPTS, 10);
+    if (env.BUFFERED_EVENTS_RETRY_ATTEMPTS) {
+      config.retryAttempts = parseInt(env.BUFFERED_EVENTS_RETRY_ATTEMPTS, 10);
     }
 
     return config;

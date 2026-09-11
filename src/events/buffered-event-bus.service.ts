@@ -45,6 +45,12 @@ export interface BufferedEventBusOptions {
   fallbackToSync?: boolean;
   enableMetrics?: boolean;
   enableHealthMonitoring?: boolean;
+  /**
+   * Absolute or file-URL-resolvable path to a processors module whose import
+   * calls `defineProcessor()` for each handled event type. Required for
+   * worker-thread processing; without it only synchronous fallback works.
+   */
+  processorsModule?: string;
 }
 
 /**
@@ -57,11 +63,12 @@ export class BufferedEventBusService extends EventEmitter {
   private config: BufferedEventConfig;
   private sharedBuffer!: SharedEventBuffer;
   private workerManager!: WorkerManager;
-  private metricsCollector!: EventMetricsCollector;
   private healthMonitor!: EventSystemHealthMonitor;
-  private retryHandler!: RetryHandler;
   
   private handlers: Map<string, IEventHandler> = new Map();
+  private processorsModule?: string;
+  private metricsCollector: EventMetricsCollector;
+  private retryHandler: RetryHandler;
   private isInitialized = false;
   private isShuttingDown = false;
   
@@ -77,10 +84,10 @@ export class BufferedEventBusService extends EventEmitter {
   constructor(options: BufferedEventBusOptions = {}) {
     super();
     
-    // Load and validate configuration
+    // Load and validate configuration. Precedence: options.config > env vars.
     const userConfig = options.config || {};
     const envConfig = BufferedEventConfigLoader.fromEnvironment();
-    const mergedConfig = { ...userConfig, ...envConfig };
+    const mergedConfig = { ...envConfig, ...userConfig };
     
     const validationErrors = BufferedEventConfigValidator.validate(mergedConfig);
     if (validationErrors.length > 0) {
@@ -89,6 +96,12 @@ export class BufferedEventBusService extends EventEmitter {
     
     this.config = BufferedEventConfigValidator.mergeWithDefaults(mergedConfig);
     this.fallbackToSync = options.fallbackToSync ?? this.config.fallbackToSync;
+    this.processorsModule = options.processorsModule;
+
+    // Metrics + retry are pure in-process components — created eagerly so the
+    // synchronous fallback path works without initialize() (no workers needed).
+    this.metricsCollector = new EventMetricsCollector(this.config);
+    this.retryHandler = new RetryHandler(this.config);
     
     this.logger.log('BufferedEventBusService initialized with configuration', {
       workerCount: this.config.workerCount,
@@ -135,17 +148,12 @@ export class BufferedEventBusService extends EventEmitter {
       totalMemoryMB: this.config.maxMemoryMB
     });
     
-    // Initialize metrics collector
-    this.metricsCollector = new EventMetricsCollector(this.config);
-    
-    // Initialize retry handler
-    this.retryHandler = new RetryHandler(this.config);
-    
-    // Initialize worker manager
+    // Worker manager + health monitor require the worker pool
     this.workerManager = new WorkerManager(
       this.config,
       this.sharedBuffer.getSharedBuffer(),
-      this.metricsCollector
+      this.metricsCollector,
+      this.processorsModule
     );
     
     // Initialize health monitor
@@ -255,16 +263,20 @@ export class BufferedEventBusService extends EventEmitter {
   }
 
   /**
-   * Register an event handler
+   * Register an event handler for synchronous fallback processing.
+   *
+   * Worker-thread processing resolves handlers from the processors module
+   * (`defineProcessor()`), so this registration only affects the sync path.
    */
   public registerHandler(eventType: string, handler: IEventHandler): void {
     this.handlers.set(eventType, handler);
-    
-    if (this.isInitialized && this.workerManager) {
-      this.workerManager.registerHandler(eventType, handler);
+
+    if (!this.processorsModule) {
+      this.logger.warn(
+        `Handler registered for '${eventType}' but no processorsModule is configured — ` +
+        `worker threads cannot process this event type; sync fallback will handle it.`
+      );
     }
-    
-    this.logger.log(`Registered handler for event type: ${eventType}`);
   }
 
   /**
@@ -471,6 +483,13 @@ export class BufferedEventBusService extends EventEmitter {
     
     await this.workerManager.scaleWorkers(targetCount);
     this.logger.log(`Scaled worker pool to ${targetCount} workers`);
+  }
+
+  /**
+   * Alias for shutdown() — consistent lifecycle naming across services.
+   */
+  public async dispose(): Promise<void> {
+    await this.shutdown();
   }
 
   /**

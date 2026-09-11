@@ -18,7 +18,14 @@ export interface EventSystemBootstrapOptions {
  * @param components An array of all registered service/controller constructors.
  * @param options Bootstrap options for event system configuration
  */
-export function bootstrapEventSystem(components: Constructor[], options: EventSystemBootstrapOptions = {}) {
+export async function bootstrapEventSystem(
+  components: Constructor[],
+  options: EventSystemBootstrapOptions = {}
+): Promise<{
+  eventBus: EventBusService
+  bufferedEventBus: BufferedEventBusService | null
+  dispose: () => Promise<void>
+}> {
   console.log('🔄 Bootstrapping Event System...')
   
   // Initialize both event bus services
@@ -29,7 +36,7 @@ export function bootstrapEventSystem(components: Constructor[], options: EventSy
     console.log('  - Initializing Buffered Event Processing...')
     bufferedEventBus = new BufferedEventBusService(options.bufferedEventConfig || {})
     // Register the buffered event bus in the container for DI
-    container.register(BufferedEventBusService, { useFactory: () => bufferedEventBus })
+    container.register(BufferedEventBusService, { useFactory: () => bufferedEventBus, override: true })
   }
 
   for (const component of components) {
@@ -66,20 +73,22 @@ export function bootstrapEventSystem(components: Constructor[], options: EventSy
       )
     }
   }
-  // Initialize buffered event bus if enabled
+  // Initialize buffered event bus if enabled — awaited, so callers observe
+  // initialization failures instead of racing an un-awaited promise.
   if (bufferedEventBus) {
-    bufferedEventBus.initialize().then(() => {
-      console.log('✅ Buffered Event System initialized successfully!')
-    }).catch((error) => {
-      console.error('❌ Failed to initialize Buffered Event System:', error)
-    })
+    await bufferedEventBus.initialize()
   }
-  
+
   console.log('✅ Event System bootstrapped successfully!\n')
-  
-  // Return the initialized event system components
+
   return {
     eventBus,
-    bufferedEventBus
+    bufferedEventBus,
+    dispose: async () => {
+      if (bufferedEventBus) {
+        await bufferedEventBus.dispose()
+      }
+      eventBus.clear()
+    },
   }
 }

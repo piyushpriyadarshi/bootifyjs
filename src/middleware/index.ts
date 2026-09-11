@@ -2,4 +2,6 @@
 export { FastifyMiddleware } from '../core/decorators'
 export * from './context.middleware'
 export * from './request-logger.middleware'
-
+export * from './authorization.middleware'
+export { authenticate, createAuthMiddleware, TokenCache } from './auth.middleware'
+export type { AuthMiddlewareOptions } from './auth.middleware'

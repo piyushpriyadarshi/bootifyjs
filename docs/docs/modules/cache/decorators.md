@@ -182,9 +182,84 @@ export class ProductService {
 }
 ```
 
+## @CachePut
+
+Write-through: the method **always executes** and its result is stored (unlike
+`@Cacheable`, which skips execution on a hit). Use it on update methods that
+return the new state:
+
+```typescript
+@Service()
+export class ProductService {
+  @CachePut({ key: "product", ttl: 300 })
+  async updateProduct(id: string, data: ProductUpdate) {
+    return await this.database.products.update(id, data); // cached under product::"id"
+  }
+}
+```
+
+`condition` bypasses execution *and* storing; `unless(result, args)` returns
+without storing; `undefined` is never stored (miss sentinel).
+
+## Conditional Caching (`condition` / `unless`)
+
+Type-safe predicates instead of SpEL strings:
+
+```typescript
+@Cacheable({
+  key: "report",
+  ttl: 60,
+  condition: (args) => args[0] !== "admin",       // no read/write for admins
+  unless: (result, args) => result.rows === 0,    // run, but don't cache empties
+})
+async report(userId: string) {
+  return await this.database.reports.forUser(userId);
+}
+```
+
+- `condition(args)` runs before everything: `false` → no cache read, no
+  single-flight join, no write.
+- `unless(result, args)` runs after the method: `true` → value returned but
+  not stored. Both may be async.
+
+## Tag-based Invalidation
+
+Group invalidation without knowing key formulas:
+
+```typescript
+@Service()
+export class UserService {
+  @Cacheable({ key: "profile", ttl: 300, tags: (args) => [`user:${args[0]}`] })
+  async profile(userId: string) { /* ... */ }
+
+  @CacheEvict({ tags: (args) => [`user:${args[0]}`] })
+  async updateEmail(userId: string, email: string) { /* ... */ }
+}
+
+await cache.flushTags("user:42"); // deletes every entry tagged user:42
+```
+
+Tags work on any store. On Redis, a client exposing `sAdd`/`sMembers`/`expire`
+gets atomic indexes; otherwise the facade falls back to read-modify-write
+under an in-process mutex.
+
+## Single-flight (Stampede Protection)
+
+`@Cacheable` dedupes concurrent misses with the same key by default: one
+caller (the leader) runs the method, the rest await the same promise. Disable
+only for side-effectful methods:
+
+```typescript
+@Cacheable({ key: "report", singleFlight: false })
+```
+
+Failures are not memoized — the next caller retries fresh. Same-key
+reentrancy throws `SingleFlightReentrancyError` instead of deadlocking. The
+utility is also exported standalone from `bootifyjs/commons`.
+
 ## Combining Decorators
 
-You can use both decorators in the same service:
+You can combine the decorators in the same service:
 
 ```typescript
 @Service()
@@ -303,22 +378,42 @@ export class WeatherService {
 
 ```typescript
 interface CacheableOptions {
-  /** Base key for the cache entry */
-  key: string;
-
-  /** Time-to-live in seconds (optional) */
+  /** Base key for the cache entry (required unless keyBuilder) */
+  key?: string;
+  /** Time-to-live in seconds (optional; 0/undefined = no expiry) */
   ttl?: number;
+  /** Full key override — must return a non-empty string */
+  keyBuilder?: (args: any[]) => string;
+  /** Always SHA-256 the arguments portion (PII-safe keys) */
+  hashArgs?: boolean;
+  /** Group invalidation: static list or args-derived */
+  tags?: string[] | ((args: any[]) => string[]);
+  /** Bypass the cache entirely when it returns false */
+  condition?: (args: any[]) => boolean | Promise<boolean>;
+  /** Skip storing when it returns true (value still returned) */
+  unless?: (result: any, args: any[]) => boolean | Promise<boolean>;
+  /** Concurrent-miss dedupe (default true) */
+  singleFlight?: boolean;
 }
 ```
+
+### @CachePut Options
+
+Same as `CacheableOptions` minus `singleFlight`.
 
 ### @CacheEvict Options
 
 ```typescript
 interface CacheEvictOptions {
-  /** Base key for the cache entry to evict */
-  key: string;
+  key?: string;
+  keyBuilder?: (args: any[]) => string;
+  hashArgs?: boolean;
+  /** Flush every entry carrying these tags */
+  tags?: string[] | ((args: any[]) => string[]);
 }
 ```
+
+At least one of `key`/`keyBuilder`/`tags` is required.
 
 ## Best Practices
 

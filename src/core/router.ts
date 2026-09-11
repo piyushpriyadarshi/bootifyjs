@@ -1,7 +1,11 @@
 import { FastifyInstance, FastifyReply, FastifyRequest, RouteOptions } from 'fastify'
 import { zodToJsonSchema } from 'zod-to-json-schema'
-import { METADATA_KEYS, SwaggerOptions, ValidationDecoratorOptions } from './decorators'
+import { METADATA_KEYS } from './decorators'
+import type { SwaggerOptions, ValidationDecoratorOptions } from './decorators'
 import { Constructor, container } from './di-container'
+import type { Container } from './di-container'
+import { AUTH_MIDDLEWARE_TOKEN } from '../constants'
+import { BootifyStateError } from './errors'
 
 /**
  * Normalize a URL prefix - ensures it starts with / and doesn't end with /
@@ -31,7 +35,7 @@ export function joinPaths(...paths: string[]): string {
  * @param methodMeta - Swagger metadata from method
  * @returns Merged metadata with method overrides and tag merging
  */
-function mergeSwaggerMetadata(
+export function mergeSwaggerMetadata(
   controllerMeta: SwaggerOptions | undefined,
   methodMeta: SwaggerOptions | undefined
 ): SwaggerOptions {
@@ -54,7 +58,7 @@ function mergeSwaggerMetadata(
   }
 }
 
-function buildFastifySchema(options: ValidationDecoratorOptions) {
+export function buildFastifySchema(options: ValidationDecoratorOptions) {
   const schema: any = {}
 
   if (options.body) schema.body = zodToJsonSchema(options.body)
@@ -70,24 +74,38 @@ function buildFastifySchema(options: ValidationDecoratorOptions) {
   return schema
 }
 
+export interface RegisterControllersOptions {
+  /** Container used to resolve controller instances. Defaults to the global container. */
+  container?: Container
+  /** Suppress registration logs (useful for tests). */
+  silent?: boolean
+}
+
 /**
  * Register controllers with Fastify
  * @param fastify - Fastify instance
  * @param controllers - Array of controller classes
  * @param groupPrefix - Optional prefix to prepend to all routes in this group
+ * @param options - Container + logging controls
  */
 export function registerControllers(
   fastify: FastifyInstance,
   controllers: Constructor[],
-  groupPrefix: string = ''
+  groupPrefix: string = '',
+  options: RegisterControllersOptions = {}
 ) {
+  const ctr = options.container ?? container
+  const log = (message: string) => {
+    if (!options.silent) console.log(message)
+  }
+
   const prefixDisplay = groupPrefix ? ` (prefix: ${groupPrefix})` : ''
-  console.log(`📋 Registering controllers${prefixDisplay}...`)
+  log(`📋 Registering controllers${prefixDisplay}...`)
 
   controllers.forEach((controllerClass) => {
     // 👇 Read controller-level middleware
     const classMiddlewares = Reflect.getMetadata(METADATA_KEYS.middleware, controllerClass) || []
-    const controllerInstance = container.resolve(controllerClass) as any
+    const controllerInstance = ctr.resolve(controllerClass) as any
     const prefix = Reflect.getMetadata(METADATA_KEYS.controllerPrefix, controllerClass) || ''
     const routes = Reflect.getMetadata(METADATA_KEYS.routes, controllerClass) || []
 
@@ -99,11 +117,40 @@ export function registerControllers(
       // 👇 Read method-level middleware
       const methodMiddlewares =
         Reflect.getMetadata(METADATA_KEYS.middleware, controllerInstance, route.handlerName) || []
-      const allMiddlewares = [...classMiddlewares, ...methodMiddlewares] // Combine them
+
+      // 👇 Auth: method-level metadata wins over class-level
+      const methodAuthRequired = Reflect.getMetadata(
+        METADATA_KEYS.authRequired, controllerClass, route.handlerName)
+      const classAuthRequired = Reflect.getMetadata(METADATA_KEYS.authRequired, controllerClass)
+      const authRequired = methodAuthRequired ?? classAuthRequired ?? false
+
+      const methodRoles: string[] | undefined = Reflect.getMetadata(
+        METADATA_KEYS.authRoles, controllerClass, route.handlerName)
+      const classRoles: string[] | undefined = Reflect.getMetadata(METADATA_KEYS.authRoles, controllerClass)
+      const requiredRoles = methodRoles ?? classRoles ?? []
+
+      const allMiddlewares = [...classMiddlewares, ...methodMiddlewares]
+
+      if (authRequired || requiredRoles.length > 0) {
+        let authBundle: any
+        try {
+          authBundle = ctr.resolve(AUTH_MIDDLEWARE_TOKEN)
+        } catch {
+          throw new BootifyStateError(
+            `'@UseAuth()'/'@Roles()' used on '${controllerClass.name}' but auth is not enabled. ` +
+            `Add .enableAuth() to createBootifyApp().`
+          )
+        }
+        allMiddlewares.push(authBundle.authenticate)
+        // authorize([]) rejects unauthenticated requests (401) and allows any
+        // role; with roles it adds the 403 check.
+        allMiddlewares.push(authBundle.authorize(requiredRoles))
+      }
 
       const handler = controllerInstance[route.handlerName].bind(controllerInstance)
+      // Param metadata is stored on the class constructor (single storage owner).
       const paramDecorators =
-        Reflect.getMetadata(METADATA_KEYS.paramTypes, controllerInstance, route.handlerName) || []
+        Reflect.getMetadata(METADATA_KEYS.paramTypes, controllerClass, route.handlerName) || []
       const validationSchemas = Reflect.getMetadata(
         METADATA_KEYS.validationSchema,
         controllerInstance,
@@ -138,10 +185,17 @@ export function registerControllers(
         }
       }
 
+      // @Public() stores an explicit `false` on the route — stamp it into the
+      // Fastify route config so metadata-aware global hooks can skip it.
+      const methodPublic = Reflect.getMetadata(METADATA_KEYS.authRequired, controllerClass, route.handlerName)
+      const classPublic = Reflect.getMetadata(METADATA_KEYS.authRequired, controllerClass)
+      const routeIsPublic = methodPublic === false || classPublic === false
+
       const routeOptions: RouteOptions = {
         method: route.method,
         url,
         schema,
+        ...(routeIsPublic ? { config: { authPublic: true } as Record<string, unknown> } : {}),
         // 👇 Attach all middleware functions to the preHandler hook
         preHandler: allMiddlewares,
         handler: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -159,6 +213,8 @@ export function registerControllers(
                   return request
                 case 'reply':
                   return reply
+                case 'currentUser':
+                  return (request as any).user
                 default:
                   return undefined
               }
@@ -176,11 +232,11 @@ export function registerControllers(
       }
 
       fastify.route(routeOptions)
-      console.log(
+      log(
         `  ✓  Registered: ${route.method.padEnd(7)} ${url} (middlewares: ${allMiddlewares.length
         })`
       )
     })
   })
-  console.log('✅ All controllers registered successfully!\n')
+  log('✅ All controllers registered successfully!\n')
 }

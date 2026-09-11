@@ -33,7 +33,6 @@ export class EventBusService {
       let attempt = 0
       while (attempt < this.options.maxRetries) {
         try {
-          console.log(`[EventBus] Attempt ${attempt + 1}: Handling event '${event.type}'`)
           await handler.handle(event)
           return // Success, exit loop
         } catch (error) {
@@ -64,9 +63,6 @@ export class EventBusService {
     const contextService = new RequestContextService()
     event.correlationId = contextService.get<string>('requestId')
 
-    console.log(`[EventBus] Emitting event '${event.type}'`, { correlationId: event.correlationId })
-    console.log(`[EventBus] Event listeners count for '${event.type}':`, this.emitter.listenerCount(event.type))
-    console.log(`[EventBus] All registered events:`, this.emitter.eventNames())
     this.emitter.emit(event.type, event)
   }
 
@@ -75,5 +71,11 @@ export class EventBusService {
    */
   getDeadLetterQueue(): IEvent[] {
     return [...this.deadLetterQueue]
+  }
+
+  /** Remove all subscriptions and reset the DLQ (tests / shutdown). */
+  clear(): void {
+    this.emitter.removeAllListeners()
+    this.deadLetterQueue.length = 0
   }
 }

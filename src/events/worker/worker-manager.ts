@@ -3,8 +3,6 @@ import * as path from 'path';
 import { EventEmitter } from 'events';
 import { BufferedEventConfig } from '../config/buffered-event-config';
 import { WorkerStatus, EventMetricsCollector } from '../metrics/event-metrics';
-import { IEventHandler } from '../event.types';
-import { PriorityEvent } from '../shared-buffer';
 
 /**
  * Worker thread wrapper with communication and lifecycle management
@@ -24,19 +22,22 @@ class ManagedWorker extends EventEmitter {
     id: string,
     workerScript: string,
     config: BufferedEventConfig,
-    sharedBuffer: SharedArrayBuffer
+    sharedBuffer: SharedArrayBuffer,
+    processorsModule?: string
   ) {
     super();
     this.id = id;
-    
-    // Create worker thread with ts-node support
+
+    // SharedArrayBuffer is transferable via postMessage; the processors module
+    // path lets the worker import user handlers directly (no eval'd strings).
+    const isTsScript = workerScript.endsWith('.ts');
     this.worker = new Worker(workerScript, {
-      workerData: { workerId: id },
-      execArgv: ['--require', 'ts-node/register']
+      workerData: { workerId: id, sharedBuffer, processorsModule },
+      execArgv: isTsScript ? ['--require', 'ts-node/register'] : []
     });
-    
+
     this.setupWorkerCommunication();
-    this.initializeWorker(config, sharedBuffer);
+    this.initializeWorker(config);
   }
 
   /**
@@ -101,25 +102,10 @@ class ManagedWorker extends EventEmitter {
   /**
    * Initialize worker with configuration
    */
-  private initializeWorker(config: BufferedEventConfig, sharedBuffer: SharedArrayBuffer): void {
+  private initializeWorker(config: BufferedEventConfig): void {
     this.worker.postMessage({
       type: 'init',
-      config,
-      sharedBuffer
-    });
-  }
-
-  /**
-   * Register event handler in worker
-   */
-  public registerHandler(eventType: string, handler: IEventHandler): void {
-    // Convert handler to serializable code (simplified approach)
-    const handlerCode = handler.handle.toString();
-    
-    this.worker.postMessage({
-      type: 'register_handler',
-      eventType,
-      handlerCode
+      config
     });
   }
 
@@ -217,18 +203,25 @@ export class WorkerManager extends EventEmitter {
   private isShuttingDown = false;
   private healthCheckInterval?: NodeJS.Timeout;
   private workerScript: string;
+  private processorsModule?: string;
 
   constructor(
     config: BufferedEventConfig,
     sharedBuffer: SharedArrayBuffer,
-    metricsCollector: EventMetricsCollector
+    metricsCollector: EventMetricsCollector,
+    processorsModule?: string
   ) {
     super();
     this.config = config;
     this.sharedBuffer = sharedBuffer;
     this.metricsCollector = metricsCollector;
-    this.workerScript = path.join(__dirname, 'event-processor.worker.ts');
-    
+    this.processorsModule = processorsModule;
+    // Work both from src (ts-node) and compiled dist builds.
+    const scriptName = __filename.endsWith('.js')
+      ? 'event-processor.worker.js'
+      : 'event-processor.worker.ts';
+    this.workerScript = path.join(__dirname, scriptName);
+
     this.startHealthMonitoring();
   }
 
@@ -259,7 +252,8 @@ export class WorkerManager extends EventEmitter {
           workerId,
           this.workerScript,
           this.config,
-          this.sharedBuffer
+          this.sharedBuffer,
+          this.processorsModule
         );
         
         // Setup event handlers
@@ -306,19 +300,6 @@ export class WorkerManager extends EventEmitter {
         reject(error);
       }
     });
-  }
-
-  /**
-   * Register event handler across all workers
-   */
-  public registerHandler(eventType: string, handler: IEventHandler): void {
-    console.log(`Registering handler for event type: ${eventType}`);
-    
-    for (const worker of this.workers.values()) {
-      if (worker.status === 'running') {
-        worker.registerHandler(eventType, handler);
-      }
-    }
   }
 
   /**

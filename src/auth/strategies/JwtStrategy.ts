@@ -30,11 +30,18 @@ export interface JwtStrategyConfig {
   tokenStorage?: TokenStorage;
   userProvider: (userId: string) => Promise<User | null>;
   credentialValidator?: (credentials: any) => Promise<User | null>;
+  /** Build extra/custom claims for the ACCESS token. Merged AFTER the
+   *  framework defaults (so you may override email/roles/permissions).
+   *  Reserved claims (sub, type, iat, jti) are rejected — the strategy
+   *  owns them. Applied on login AND refresh (both mint new pairs). */
+  payloadBuilder?: (user: User, context: AuthContext) => Record<string, unknown>
 }
 
 export class JwtStrategy implements AuthStrategy {
   readonly name = 'jwt';
   readonly type = AuthStrategyType.JWT;
+
+  private static readonly RESERVED_CLAIMS = ['sub', 'type', 'iat', 'jti'] as const;
 
   private config!: JwtStrategyConfig;
   private tokenStorage?: TokenStorage;
@@ -59,12 +66,17 @@ export class JwtStrategy implements AuthStrategy {
         500
       );
     }
+
+    if (this.config.payloadBuilder !== undefined && typeof this.config.payloadBuilder !== 'function') {
+      throw new AuthError(
+        'payloadBuilder must be a function',
+        'INVALID_CONFIG',
+        500
+      );
+    }
   }
 
   async authenticate(context: AuthContext): Promise<AuthResult> {
-
-    console.log('JwtStrategy.authenyicate', context, this.config)
-
     try {
       // Extract credentials from request body
       const credentials = context.body;
@@ -93,7 +105,7 @@ export class JwtStrategy implements AuthStrategy {
       }
 
       // Generate token pair
-      const tokens = await this.generateTokenPair(user);
+      const tokens = await this.generateTokenPair(user, context);
 
       // Store refresh token
       if (this.tokenStorage) {
@@ -115,7 +127,6 @@ export class JwtStrategy implements AuthStrategy {
   }
 
   async validate(token: string, context: AuthContext): Promise<AuthResult> {
-    console.log('JwtStrategy.validate', token, context)
     try {
       // Verify and decode the access token
       const decoded = jwt.verify(token, this.config.accessTokenSecret, {
@@ -196,7 +207,7 @@ export class JwtStrategy implements AuthStrategy {
       }
 
       // Generate new token pair
-      const tokens = await this.generateTokenPair(user);
+      const tokens = await this.generateTokenPair(user, context);
 
       // Store new refresh token and revoke old one
       if (this.tokenStorage) {
@@ -268,11 +279,12 @@ export class JwtStrategy implements AuthStrategy {
   /**
    * Generate a new access and refresh token pair
    */
-  private async generateTokenPair(user: User): Promise<TokenPair> {
+  private async generateTokenPair(user: User, context: AuthContext): Promise<TokenPair> {
     const now = Math.floor(Date.now() / 1000);
     const tokenId = crypto.randomUUID();
 
-    // Access token payload
+    // Access token payload — custom claims spread LAST so they may reshape
+    // the framework defaults; reserved keys are rejected in buildCustomClaims.
     const accessPayload = {
       sub: user.id,
       email: user.email,
@@ -280,7 +292,8 @@ export class JwtStrategy implements AuthStrategy {
       permissions: user.permissions,
       type: 'access',
       iat: now,
-      jti: tokenId
+      jti: tokenId,
+      ...this.buildCustomClaims(user, context)
     };
 
     // Refresh token payload
@@ -327,6 +340,28 @@ export class JwtStrategy implements AuthStrategy {
       expiresIn,
       tokenType: 'Bearer'
     };
+  }
+
+  /**
+   * Invoke the configured payloadBuilder and reject reserved claims
+   */
+  private buildCustomClaims(user: User, context: AuthContext): Record<string, unknown> {
+    if (!this.config.payloadBuilder) return {};
+
+    const claims = this.config.payloadBuilder(user, context) ?? {};
+    const reserved = Object.keys(claims).filter(
+      (k) => (JwtStrategy.RESERVED_CLAIMS as readonly string[]).includes(k)
+    );
+
+    if (reserved.length > 0) {
+      throw new AuthError(
+        `payloadBuilder cannot set reserved claims: ${reserved.join(', ')}`,
+        'JWT_PAYLOAD_CLAIM_RESERVED',
+        500
+      );
+    }
+
+    return claims;
   }
 
   /**

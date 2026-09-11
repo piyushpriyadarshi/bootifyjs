@@ -18,14 +18,17 @@ Our goal is to make building complex, scalable, and maintainable backend applica
 
 ### Installation
 
-To create a new BootifyJS project, you can use our upcoming CLI or set it up manually.
+Scaffold a fully working project — with auth, docs, health, tracing and tests — in one command:
 
 ```bash
-# (Coming Soon)
-# npx bootifyjs-cli new my-project
+npx bootifyjs new my-api                          # tour template: every decorator in one app
+npx bootifyjs new my-api --template goals --yes   # full POC (DB, events, cron)
 
-# Manual Installation
-npm install bootifyjs fastify reflect-metadata
+# inside an existing project:
+npx bootifyjs generate controller tasks
+npx bootifyjs generate service tasks
+npx bootifyjs generate repository tasks
+npx bootifyjs generate event goal.completed
 ```
 
 ### Your First Application
@@ -48,7 +51,7 @@ export class HelloController {
 }
 
 async function main() {
-  await createBootify()
+  await createBootifyApp()
     .setServiceName("my-app")
     .setPort(3000)
     .useControllers([HelloController])
@@ -80,7 +83,7 @@ const configSchema = z.object({
 });
 
 async function main() {
-  const { app, start, logger } = await createBootify()
+  const { app, start, logger } = await createBootifyApp()
     .setServiceName("my-api")
     .setPort(3000)
     .setHostname("0.0.0.0")
@@ -186,12 +189,22 @@ Then use it with BootifyApp:
 import { createBootify } from "bootifyjs";
 import { PinoAdapter } from "./adapters/pino-adapter";
 
-createBootify()
+createBootifyApp()
   .useLogger((builder) =>
     builder.use(new PinoAdapter({ level: "info", prettyPrint: true }))
   )
   .start();
 ```
+
+## Module documentation
+
+Each module ships its own in-depth README — the "bible" for that unit:
+implementation details, examples, and every gotcha.
+
+| Module | Documentation |
+|---|---|
+| Caching (`bootifyjs/cache`) | [**src/cache/README.md**](src/cache/README.md) — stores, decorators, single-flight, tags, TTL semantics, the eviction-key contract |
+| Framework commons (`bootifyjs/commons`) | [**src/commons/README.md**](src/commons/README.md) — `singleFlight`, `stableStringify` |
 
 ## Philosophy
 

@@ -2,7 +2,7 @@ import dotenv from "dotenv";
 import { FastifyInstance } from "fastify";
 import "reflect-metadata";
 import z from "zod";
-import { createBootify } from "../BootifyApp";
+import { createBootifyApp } from "../BootifyApp";
 import { HealthController } from "./controllers/health.controller";
 import { TodoController } from "./controllers/todo.controller";
 
@@ -38,7 +38,7 @@ const mockRedis = {
 };
 
 async function main() {
-    const { app, start, startupLogger, logger } = await createBootify()
+    const bootify = await createBootifyApp()
         // Configuration
         .useConfig(envSchema)
         .setPort(8080)
@@ -105,7 +105,11 @@ async function main() {
 
         .build();
 
-    await start();
+    const app = bootify.handle
+    const logger = bootify.logger
+    const startupLogger = bootify.startupLogger
+
+    await bootify.start();
 }
 
 // Graceful shutdown

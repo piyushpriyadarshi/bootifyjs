@@ -79,5 +79,5 @@ export interface IStartupLogger {
     logComponentComplete(details?: string): void
     logComponentFailed(error: Error): void
     logStartupComplete(): void
-    logStartupSummary(port: number, host: string): void
+    logStartupSummary(port: number, host: string, options?: { docsPath?: string }): void
 }

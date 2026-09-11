@@ -1,165 +1,42 @@
-// import 'reflect-metadata'
-// import { METADATA_KEYS } from './decorators'
+import 'reflect-metadata'
+import { FRAMEWORK_METADATA_KEYS } from '../constants'
+import {
+  CircularDependencyError,
+  InterfaceTokenError,
+  InvalidRegistrationError,
+  ServiceNotFoundError,
+} from './errors'
 
-// export type Constructor<T = any> = new (...args: any[]) => T
-// export type DiToken = any
+// --- Type Definitions ---
+export type Constructor<T = any> = new (...args: any[]) => T
+
+/** A DI token: a string, a symbol, or a class constructor. */
+export type DiToken = string | symbol | Constructor
+
+export type BindingScope = 'singleton' | 'transient'
+
+/**
+ * Reflection metadata keys used by the DI container and route decorators.
+ * Defined here (not in decorators.ts) so di-container and decorators.ts
+ * never import each other — decorators.ts re-exports this for compatibility.
+ */
+export const METADATA_KEYS = {
+  controllerPrefix: FRAMEWORK_METADATA_KEYS.CONTROLLER_PREFIX,
+  routes: FRAMEWORK_METADATA_KEYS.ROUTES,
+  validationSchema: FRAMEWORK_METADATA_KEYS.VALIDATION_SCHEMA,
+  paramTypes: FRAMEWORK_METADATA_KEYS.PARAM_TYPES,
+  middleware: FRAMEWORK_METADATA_KEYS.MIDDLEWARE,
+  autowiredProperties: FRAMEWORK_METADATA_KEYS.AUTOWIRED_PROPERTIES,
+  autowiredParams: FRAMEWORK_METADATA_KEYS.AUTOWIRED_PARAMS,
+  swaggerMetadata: 'swagger:metadata',
+  authRequired: FRAMEWORK_METADATA_KEYS.AUTH_REQUIRED,
+  authRoles: FRAMEWORK_METADATA_KEYS.AUTH_ROLES,
+} as const
 
 export enum Scope {
   SINGLETON = 'singleton',
   TRANSIENT = 'transient',
 }
-
-// // The definition now clearly separates the token from the class to instantiate
-// interface ServiceDefinition {
-//   useClass: Constructor
-//   scope: Scope
-//   instance?: any
-// }
-
-// export interface RegistrationOptions {
-//   useClass: Constructor
-//   scope?: Scope
-// }
-
-// export class Container {
-//   private services = new Map<DiToken, ServiceDefinition>()
-//   private resolving = new Set<DiToken>()
-
-//   // The register method is now more powerful
-//   register(token: DiToken, options: RegistrationOptions): void {
-//     if (!this.services.has(token)) {
-//       this.services.set(token, {
-//         useClass: options.useClass,
-//         scope: options.scope || Scope.SINGLETON,
-//       })
-//     }
-//     console.log(this.services)
-//   }
-
-//   // resolve<T>(token: DiToken): T {
-//   //   const serviceDef = this.services.get(token)
-//   //   console.log('serviceDef', serviceDef, token)
-//   //   if (!serviceDef) {
-//   //     throw new Error(`Service with token '${String(token)}' is not registered.`)
-//   //   }
-
-//   //   if (this.resolving.has(token)) {
-//   //     throw new Error(`Circular dependency detected for token '${String(token)}'.`)
-//   //   }
-
-//   //   if (serviceDef.scope === Scope.SINGLETON && serviceDef.instance) {
-//   //     return serviceDef.instance
-//   //   }
-
-//   //   this.resolving.add(token)
-
-//   //   try {
-//   //     // We always instantiate using serviceDef.useClass
-//   //     const ConcreteClass = serviceDef.useClass
-
-//   //     const constructorDeps = Reflect.getMetadata('design:paramtypes', ConcreteClass) || []
-//   //     const constructorArgs = constructorDeps.map((dep: Constructor) => this.resolve(dep))
-//   //     const instance = new ConcreteClass(...constructorArgs)
-
-//   //     const autowiredProperties =
-//   //       Reflect.getMetadata(METADATA_KEYS.autowiredProperties, ConcreteClass) || []
-//   //     for (const prop of autowiredProperties) {
-//   //       // Resolve the dependency using its registered token (which could be a class or a symbol)
-//   //       const dependencyToken = prop.token || prop.type
-//   //       const dependencyToInject = this.resolve(dependencyToken)
-//   //       ;(instance as any)[prop.propertyKey] = dependencyToInject
-//   //     }
-
-//   //     if (serviceDef.scope === Scope.SINGLETON) {
-//   //       serviceDef.instance = instance
-//   //     }
-//   //     return instance
-//   //   } finally {
-//   //     this.resolving.delete(token)
-//   //   }
-//   // }
-//   public getRegisteredComponents(): Constructor[] {
-//     const definitions = Array.from(this.services.values())
-//     // Use a Set to automatically handle duplicates, as multiple tokens
-//     // can point to the same class constructor.
-
-//     console.log('definitions', definitions)
-//     const uniqueConstructors = new Set(definitions.map((def) => def.useClass))
-//     return Array.from(uniqueConstructors)
-//   }
-//   public resolve<T>(token: DiToken): T {
-//     const serviceDef = this.services.get(token)
-//     if (!serviceDef) {
-//       throw new Error(`[DI] Service with token '${String(token)}' is not registered.`)
-//     }
-
-//     if (this.resolving.has(token)) {
-//       throw new Error(`[DI] Circular dependency detected for token '${String(token)}'.`)
-//     }
-
-//     if (serviceDef.scope === Scope.SINGLETON && serviceDef.instance) {
-//       return serviceDef.instance
-//     }
-
-//     this.resolving.add(token)
-
-//     try {
-//       const ConcreteClass = serviceDef.useClass
-
-//       // --- This is the implementation you are looking for ---
-//       // 1. Get both sets of metadata for the constructor.
-//       const constructorParamTypes = Reflect.getMetadata('design:paramtypes', ConcreteClass) || []
-//       const autowiredParamTokens =
-//         Reflect.getMetadata(METADATA_KEYS.autowiredParams, ConcreteClass) || []
-
-//       // 2. Resolve constructor arguments by prioritizing the @Autowired token.
-//       const constructorArgs = constructorParamTypes.map((paramType: any, index: number) => {
-//         // If an @Autowired(TOKEN) was used on this parameter, use that token.
-//         // Otherwise, fall back to the type inferred by reflect-metadata.
-//         const tokenToResolve = autowiredParamTokens[index] || paramType
-
-//         // Prevent trying to resolve primitive types like String, Number, etc.
-//         if ([String, Number, Boolean, Object].includes(tokenToResolve)) {
-//           // This check prevents the "String is not registered" error.
-//           return undefined
-//         }
-
-//         // Recursively resolve the dependency.
-//         return this.resolve(tokenToResolve)
-//       })
-
-//       // 3. Instantiate the Class with the resolved dependencies.
-//       const instance = new ConcreteClass(...constructorArgs)
-
-//       // 4. Perform Property (Field) Injection.
-//       const autowiredProperties =
-//         Reflect.getMetadata(METADATA_KEYS.autowiredProperties, ConcreteClass) || []
-//       for (const prop of autowiredProperties) {
-//         ;(instance as any)[prop.propertyKey] = this.resolve(prop.token)
-//       }
-
-//       if (serviceDef.scope === Scope.SINGLETON) {
-//         serviceDef.instance = instance
-//       }
-//       return instance
-//     } finally {
-//       this.resolving.delete(token)
-//     }
-//   }
-//   public isRegistered(token: DiToken): boolean {
-//     return this.services.has(token)
-//   }
-// }
-
-// export const container = new Container()
-
-import 'reflect-metadata'
-import { METADATA_KEYS } from './decorators'
-
-// --- Type Definitions ---
-export type Constructor<T = any> = new (...args: any[]) => T
-export type DiToken = any
-export type BindingScope = 'singleton' | 'transient'
 
 export interface ComponentOptions {
   bindTo?: DiToken[]
@@ -169,19 +46,24 @@ export interface ComponentOptions {
 
 export interface RegistrationOptions {
   useClass?: Constructor
-  useFactory?: () => any // <-- ADDED: For factory providers
+  useFactory?: () => unknown
   scope?: BindingScope
+  /** Resolve (and cache) during `Container.eagerInit()`. */
+  eager?: boolean
+  /** Allow replacing an existing registration for this token. */
+  override?: boolean
 }
 
 interface ServiceDefinition {
   useClass?: Constructor
-  useFactory?: () => any // <-- ADDED: For factory providers
+  useFactory?: () => unknown
   scope: BindingScope
-  instance?: any
+  eager: boolean
+  instance?: unknown
 }
 
-// --- Eager Loading Registry ---
-export const eagerIdentifiers = new Set<DiToken>()
+/** Constructor parameter types emitted by reflect-metadata for primitives. */
+const PRIMITIVE_PARAM_TYPES = [String, Number, Boolean]
 
 // --- The Container Class ---
 export class Container {
@@ -190,72 +72,90 @@ export class Container {
 
   public register(token: DiToken, options: RegistrationOptions): void {
     if (!options.useClass && !options.useFactory) {
-      throw new Error(
+      throw new InvalidRegistrationError(
         `[DI] Registration for token '${String(token)}' requires 'useClass' or 'useFactory'.`
       )
     }
+
+    if (this.services.has(token) && !options.override) {
+      throw new InvalidRegistrationError(
+        `[DI] Token '${String(token)}' is already registered. Pass { override: true } to replace it.`
+      )
+    }
+
     this.services.set(token, {
       useClass: options.useClass,
       useFactory: options.useFactory,
       scope: options.scope || 'singleton',
+      eager: options.eager === true,
     })
   }
 
-  public resolve<T>(token: DiToken): T {
+  public resolve<T = unknown>(token: DiToken): T {
     const serviceDef = this.services.get(token)
     if (!serviceDef) {
-      throw new Error(`[DI] Service with token '${String(token)}' is not registered.`)
+      throw new ServiceNotFoundError(String(token))
     }
 
     if (this.resolving.has(token)) {
-      throw new Error(`[DI] Circular dependency detected for token '${String(token)}'.`)
+      throw new CircularDependencyError(String(token))
     }
 
-
-
-    if (serviceDef.scope === 'singleton' && serviceDef.instance) {
-      return serviceDef.instance
+    if (serviceDef.scope === 'singleton' && 'instance' in serviceDef) {
+      return serviceDef.instance as T
     }
 
     this.resolving.add(token)
 
     try {
-      let instance: T
+      let instance: unknown
 
-      // --- ENHANCED: Handle factory providers first ---
       if (serviceDef.useFactory) {
         instance = serviceDef.useFactory()
-      } else if (serviceDef.useClass) {
-        // Fallback to class-based instantiation
-        const ConcreteClass = serviceDef.useClass
-        const constructorArgs = this.resolveConstructorArgs(ConcreteClass)
-        instance = new ConcreteClass(...constructorArgs) as T
-        this.performPropertyInjection(instance, ConcreteClass)
+        // Factory-created instances participate in property injection too:
+        // metadata is read from the runtime constructor of the created object.
+        this.performPropertyInjection(instance)
       } else {
-        // This case should be prevented by the check in .register()
-        throw new Error(`[DI] No valid provider for token '${String(token)}'.`)
+        const ConcreteClass = serviceDef.useClass!
+        const constructorArgs = this.resolveConstructorArgs(ConcreteClass)
+        instance = new ConcreteClass(...constructorArgs)
+        this.performPropertyInjection(instance)
       }
 
       if (serviceDef.scope === 'singleton') {
         serviceDef.instance = instance
-
       }
 
-      return instance
+      return instance as T
     } finally {
       this.resolving.delete(token)
     }
   }
 
   private resolveConstructorArgs(ConcreteClass: Constructor): any[] {
-    const constructorParamTypes = Reflect.getMetadata('design:paramtypes', ConcreteClass) || []
+    const constructorParamTypes =
+      (Reflect.getMetadata('design:paramtypes', ConcreteClass) as any[]) || []
     const autowiredParamTokens =
-      Reflect.getMetadata(METADATA_KEYS.autowiredParams, ConcreteClass) || []
+      (Reflect.getMetadata(METADATA_KEYS.autowiredParams, ConcreteClass) as any[]) || []
 
     return constructorParamTypes.map((paramType: any, index: number) => {
       const tokenToResolve = autowiredParamTokens[index] || paramType
 
-      if (!tokenToResolve || [String, Number, Boolean, Object].includes(tokenToResolve)) {
+      if (!tokenToResolve) {
+        return undefined
+      }
+
+      if (tokenToResolve === Object) {
+        // `design:paramtypes` emits Object for interface-typed or untyped
+        // parameters. Silence here produces a broken `undefined` dependency —
+        // fail loudly instead (LLD contract: InterfaceTokenError).
+        throw new InterfaceTokenError(
+          `[DI] Constructor parameter ${index} of '${ConcreteClass.name}' resolves to 'Object' ` +
+            `(an interface or untyped parameter). Annotate it with @Autowired(token).`
+        )
+      }
+
+      if (PRIMITIVE_PARAM_TYPES.includes(tokenToResolve)) {
         return undefined
       }
 
@@ -263,9 +163,20 @@ export class Container {
     })
   }
 
-  private performPropertyInjection(instance: any, ConcreteClass: Constructor): void {
+  private performPropertyInjection(instance: unknown): void {
+    if (!instance || (typeof instance !== 'object' && typeof instance !== 'function')) {
+      return
+    }
+
+    const ctor = (instance as any).constructor
+    if (!ctor) {
+      return
+    }
+
     const autowiredProperties =
-      Reflect.getMetadata(METADATA_KEYS.autowiredProperties, ConcreteClass) || []
+      (Reflect.getMetadata(METADATA_KEYS.autowiredProperties, ctor) as
+        | { propertyKey: string | symbol; token: DiToken }[]
+        | undefined) || []
     for (const prop of autowiredProperties) {
       ;(instance as any)[prop.propertyKey] = this.resolve(prop.token)
     }
@@ -276,9 +187,34 @@ export class Container {
     const classDefs = definitions.filter((def) => def.useClass).map((def) => def.useClass!)
     return Array.from(new Set(classDefs))
   }
+
   public isRegistered(token: DiToken): boolean {
     return this.services.has(token)
   }
+
+  /** Remove a single registration (and its cached instance). */
+  public unregister(token: DiToken): void {
+    this.services.delete(token)
+  }
+
+  /** Resolve every registration marked `eager: true`. Called by BootifyApp.build(). */
+  public async eagerInit(): Promise<void> {
+    for (const [token, def] of this.services) {
+      if (def.eager) {
+        this.resolve(token)
+      }
+    }
+  }
+
+  /** Remove all registrations and cached instances (tests / HMR). */
+  public clear(): void {
+    this.services.clear()
+    this.resolving.clear()
+  }
+}
+
+export function createContainer(): Container {
+  return new Container()
 }
 
 export const container = new Container()

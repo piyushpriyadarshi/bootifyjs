@@ -1,7 +1,8 @@
-import * as os from 'os'
 import { DEFAULT_SERVER_PORT } from '../../constants'
 import { Autowired, Service } from '../../core'
-import { Logger } from './logger'
+import { BaseLogger } from './base-logger'
+import type { ILogger } from './interfaces'
+import { DefaultSystemInfoProvider, SystemInfoProvider } from './system-info'
 
 // ANSI color codes
 const colors = {
@@ -77,8 +78,11 @@ export class EnhancedStartupLogger {
     private config: StartupConfig
     private healthChecks: Map<string, () => Promise<boolean>> = new Map()
 
-    @Autowired(Logger)
-    private readonly logger!: Logger
+    @Autowired(BaseLogger)
+    private readonly logger!: ILogger
+
+    /** Injectable system facts (tests provide static data). */
+    public systemInfoProvider: SystemInfoProvider = new DefaultSystemInfoProvider()
 
     constructor() {
         this.startupStartTime = Date.now()
@@ -108,11 +112,11 @@ export class EnhancedStartupLogger {
             mode: this.config.mode,
             environment: process.env.NODE_ENV || 'development',
             nodeVersion: process.version,
-            platform: os.platform(),
-            arch: os.arch(),
-            memory: this.formatMemory(os.totalmem()),
-            cpus: os.cpus().length,
-            hostname: os.hostname(),
+            platform: this.systemInfoProvider.get().platform,
+            arch: this.systemInfoProvider.get().arch,
+            memory: this.formatMemory(this.systemInfoProvider.get().totalMemoryBytes),
+            cpus: this.systemInfoProvider.get().cpuCount,
+            hostname: this.systemInfoProvider.get().hostname,
         })
     }
 
@@ -287,7 +291,7 @@ export class EnhancedStartupLogger {
         })
     }
 
-    public async logStartupSummary(port?: number, host?: string): Promise<void> {
+    public async logStartupSummary(port?: number, host?: string, options: { docsPath?: string } = {}): Promise<void> {
         const totalDuration = Date.now() - this.startupStartTime
         const actualPort = port || process.env.PORT || DEFAULT_SERVER_PORT
         const actualHost = host || 'localhost'
@@ -316,7 +320,7 @@ export class EnhancedStartupLogger {
         }
 
         // Build summary
-        const summary = this.buildStartupSummary(totalDuration, actualPort, actualHost, healthStatus)
+        const summary = this.buildStartupSummary(totalDuration, actualPort, actualHost, healthStatus, options)
         console.log(summary)
 
         // Show component breakdown in verbose/debug mode
@@ -483,7 +487,8 @@ export class EnhancedStartupLogger {
         totalDuration: number,
         port: number | string,
         host: string,
-        healthStatus: string
+        healthStatus: string,
+        options: { docsPath?: string } = {}
     ): string {
         const lines: string[] = ['']
 
@@ -505,7 +510,9 @@ export class EnhancedStartupLogger {
 
         // Server info
         lines.push(`🌐 Server: ${this.colorize(`http://${host}:${port}`, colors.bright + colors.blue)}`)
-        lines.push(`📚 API Docs: ${this.colorize(`http://${host}:${port}/api-docs`, colors.bright + colors.blue)}`)
+        if (options.docsPath) {
+            lines.push(`📚 API Docs: ${this.colorize(`http://${host}:${port}${options.docsPath}`, colors.bright + colors.blue)}`)
+        }
 
         // Health status
         if (healthStatus !== 'unknown') {
@@ -565,7 +572,7 @@ export class EnhancedStartupLogger {
     }
 
     private createStartupBanner(): string {
-        const version = this.getVersion()
+        const version = this.systemInfoProvider.get().appVersion
         const banner = `
   ____              _   _  __       _ ____  
  |  _ \\            | | (_)/ _|     | / ___| 
@@ -579,34 +586,6 @@ export class EnhancedStartupLogger {
  :: BootifyJS Framework ::        (v${version})
 `
         return this.colorize(banner, colors.cyan)
-    }
-
-    private getVersion(): string {
-        try {
-            // Try to read from package.json
-            const fs = require('fs')
-            const path = require('path')
-
-            // Look for package.json in common locations
-            const possiblePaths = [
-                path.join(process.cwd(), 'package.json'),
-                path.join(__dirname, '../../../package.json'),
-                path.join(__dirname, '../../package.json'),
-            ]
-
-            for (const pkgPath of possiblePaths) {
-                if (fs.existsSync(pkgPath)) {
-                    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
-                    if (pkg.version) {
-                        return pkg.version
-                    }
-                }
-            }
-        } catch (error) {
-            // Fallback to environment variable or default
-        }
-
-        return process.env.SERVICE_VERSION || '1.0.0'
     }
 
     private formatMemory(bytes: number): string {

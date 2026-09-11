@@ -12,7 +12,7 @@ export async function runIntegrationTest() {
     // Bootstrap the event system with buffered processing enabled
     console.log('🔧 Bootstrapping event system with buffered processing...');
     
-    const eventSystem = bootstrapEventSystem([], {
+    const eventSystem = await bootstrapEventSystem([], {
       useBufferedProcessing: true,
       bufferedEventConfig: {
         ...defaultBufferedEventConfig,
@@ -96,7 +96,7 @@ export async function runPerformanceComparison() {
   console.log(`🔄 Testing regular event processing (${eventCount} events)...`);
   const regularStart = Date.now();
   
-  const regularEventSystem = bootstrapEventSystem([], {
+  const regularEventSystem = await bootstrapEventSystem([], {
     useBufferedProcessing: false
   });
   
@@ -114,7 +114,7 @@ export async function runPerformanceComparison() {
   console.log(`🔄 Testing buffered event processing (${eventCount} events)...`);
   const bufferedStart = Date.now();
   
-  const bufferedEventSystem = bootstrapEventSystem([], {
+  const bufferedEventSystem = await bootstrapEventSystem([], {
     useBufferedProcessing: true,
     bufferedEventConfig: {
       ...defaultBufferedEventConfig,

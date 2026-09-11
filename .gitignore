@@ -1,10 +1,14 @@
 node_modules/
 dist/
+dist-test/
+coverage/
 .env
+.DS_Store
 
 .kiro/
 .marscode/
 .vscode/
+.commandcode/
 
 src/outreach.md
 

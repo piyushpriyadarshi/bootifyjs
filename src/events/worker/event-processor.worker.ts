@@ -1,16 +1,25 @@
 import { parentPort, workerData } from 'worker_threads';
+import { pathToFileURL } from 'url';
 import { SharedEventBuffer, PriorityEvent } from '../shared-buffer';
-import { IEventHandler } from '../event.types';
 import { RetryHandler, RetryableEvent } from '../retry/retry-handler';
 import { BufferedEventConfig } from '../config/buffered-event-config';
 import { WorkerStatus } from '../metrics/event-metrics';
+import { getProcessor, hasProcessor } from './processor-registry';
+
+/**
+ * Shape of `workerData` provided by the WorkerManager at thread creation.
+ */
+interface WorkerContext {
+  workerId: string;
+  sharedBuffer: SharedArrayBuffer;
+  processorsModule?: string;
+}
 
 /**
  * Message types for worker communication
  */
-type WorkerMessage = 
-  | { type: 'init'; config: BufferedEventConfig; sharedBuffer: SharedArrayBuffer }
-  | { type: 'register_handler'; eventType: string; handlerCode: string }
+type WorkerMessage =
+  | { type: 'init'; config: BufferedEventConfig }
   | { type: 'shutdown' }
   | { type: 'health_check' }
   | { type: 'get_stats' };
@@ -40,10 +49,10 @@ interface WorkerStats {
  */
 class EventProcessorWorker {
   private workerId: string;
+  private context: WorkerContext;
   private config!: BufferedEventConfig;
   private buffer!: SharedEventBuffer;
   private retryHandler!: RetryHandler;
-  private handlers: Map<string, IEventHandler> = new Map();
   private isRunning = false;
   private isShuttingDown = false;
   
@@ -60,7 +69,8 @@ class EventProcessorWorker {
   private processingLoop?: Promise<void>;
 
   constructor() {
-    this.workerId = `worker_${process.pid}_${Date.now()}`;
+    this.context = (workerData || {}) as WorkerContext;
+    this.workerId = this.context.workerId || `worker_${process.pid}_${Date.now()}`;
     this.setupMessageHandling();
   }
 
@@ -100,13 +110,9 @@ class EventProcessorWorker {
   private async handleMessage(message: WorkerMessage): Promise<void> {
     switch (message.type) {
       case 'init':
-        await this.initialize(message.config, message.sharedBuffer);
+        await this.initialize(message.config);
         break;
-        
-      case 'register_handler':
-        this.registerHandler(message.eventType, message.handlerCode);
-        break;
-        
+
       case 'shutdown':
         await this.shutdown();
         break;
@@ -125,50 +131,42 @@ class EventProcessorWorker {
   }
 
   /**
-   * Initialize worker with configuration and shared buffer
+   * Initialize worker with configuration and the shared buffer from workerData.
    */
-  private async initialize(config: BufferedEventConfig, sharedBuffer: SharedArrayBuffer): Promise<void> {
+  private async initialize(config: BufferedEventConfig): Promise<void> {
     this.config = config;
-    this.buffer = new SharedEventBuffer({
-      maxEvents: config.maxQueueSize,
-      maxEventSize: config.maxEventSize,
-      totalMemoryMB: config.maxMemoryMB
-    });
-    
-    // Initialize buffer with existing shared memory
-    (this.buffer as any).buffer = sharedBuffer;
-    
+
+    if (this.context.sharedBuffer) {
+      this.buffer = new SharedEventBuffer({
+        maxEvents: config.maxQueueSize,
+        maxEventSize: config.maxEventSize,
+        totalMemoryMB: config.maxMemoryMB
+      });
+      // Adopt the main thread's shared memory
+      (this.buffer as any).buffer = this.context.sharedBuffer;
+    }
+
     this.retryHandler = new RetryHandler(config);
-    
+
+    // Import the user's processors module — its side effects call
+    // defineProcessor() for every handled event type.
+    if (this.context.processorsModule) {
+      try {
+        await import(pathToFileURL(this.context.processorsModule).href);
+      } catch (error) {
+        this.sendError(`Failed to load processors module: ${error}`);
+      }
+    }
+
     // Start health monitoring
     this.startHealthMonitoring();
-    
+
     // Start processing loop
     this.isRunning = true;
     this.processingLoop = this.startProcessingLoop();
-    
+
     this.sendMessage({ type: 'ready' });
     console.log(`[Worker ${this.workerId}] Initialized and ready`);
-  }
-
-  /**
-   * Register event handler
-   */
-  private registerHandler(eventType: string, handlerCode: string): void {
-    try {
-      // Create handler from code (simplified - in production, use safer evaluation)
-      const handlerFunction = new Function('event', handlerCode);
-      const handler: IEventHandler = {
-        handle: async (event: PriorityEvent) => {
-          return handlerFunction(event);
-        }
-      };
-      
-      this.handlers.set(eventType, handler);
-      console.log(`[Worker ${this.workerId}] Registered handler for event type: ${eventType}`);
-    } catch (error) {
-      this.sendError(`Failed to register handler for ${eventType}: ${error}`);
-    }
   }
 
   /**
@@ -208,11 +206,10 @@ class EventProcessorWorker {
     let success = false;
     
     try {
-      const handler = this.handlers.get(event.type);
-      
-      if (!handler) {
-        throw new Error(`No handler registered for event type: ${event.type}`);
+      if (!hasProcessor(event.type)) {
+        throw new Error(`No processor defined for event type: ${event.type}`);
       }
+      const handler = getProcessor(event.type)!;
       
       // Process event with retry logic
       await this.retryHandler.handleWithRetry(event, handler);

@@ -2,19 +2,25 @@ import { container } from '../core/di-container'
 import { CACHE_STORE_TOKEN } from './cache.types'
 import { InMemoryCacheStore } from './stores/in-memory-cache.store'
 
-/**
- * Checks if a user has provided a custom cache store. If not, it registers
- * the default InMemoryCacheStore. This makes the caching system work out-of-the-box.
- */
-export function bootstrapCache() {
-  console.log('🔄 Bootstrapping Cache System...')
+export interface BootstrapCacheOptions {
+  /** LRU bound for the default store (A2). Omitted → unlimited. */
+  maxEntries?: number
+}
 
+/**
+ * Ensures a cache store is bound to CACHE_STORE_TOKEN. If the user has
+ * already registered a custom store, this is a no-op. Idempotent and silent.
+ *
+ * @returns An unbootstrap function that unbinds the default store (tests/HMR).
+ */
+export function bootstrapCache(options: BootstrapCacheOptions = {}): () => void {
   if (!container.isRegistered(CACHE_STORE_TOKEN)) {
-    console.log('  - No custom cache store provided. Binding default InMemoryCacheStore.')
-    // The user didn't bind anything to the token, so we provide the default.
-    container.register(CACHE_STORE_TOKEN, { useClass: InMemoryCacheStore })
-  } else {
-    console.log('  - Custom cache store detected. Skipping default binding.')
+    container.register(CACHE_STORE_TOKEN, {
+      useFactory: () => new InMemoryCacheStore(options),
+      override: true,
+    })
+    return () => container.unregister(CACHE_STORE_TOKEN)
   }
-  console.log('✅ Cache System bootstrapped successfully!\n')
+
+  return () => undefined
 }

@@ -32,7 +32,9 @@ if (cluster.isPrimary) {
         console.log(`Worker ${worker.process.pid} is online`)
     })
 } else {
-    // Workers run the server
-    await import('./examples/index')
-    console.log(`Worker ${process.pid} started`)
+    // Workers run the server (async IIFE keeps the file valid under CJS tsc builds)
+    void (async () => {
+        await import('./examples/index')
+        console.log(`Worker ${process.pid} started`)
+    })()
 }

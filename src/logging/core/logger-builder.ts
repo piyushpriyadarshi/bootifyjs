@@ -5,7 +5,8 @@
  * The core module has NO external logging library dependencies.
  * Users can provide their own ILogger implementation (Pino, Winston, etc.)
  */
-import { container } from '../../core/di-container'
+import { container as globalContainer } from '../../core/di-container'
+import type { Container } from '../../core/di-container'
 import { BaseLogger } from './base-logger'
 import {
     IContextProvider,
@@ -127,9 +128,10 @@ export class LoggerBuilder {
     }
 
     /**
-     * Build and register the logger with DI container
+     * Build and register the logger with a DI container
+     * (defaults to the global container).
      */
-    build(): ILogger {
+    build(targetContainer: Container = globalContainer): ILogger {
         let logger: ILogger
 
         if (this.customLogger) {
@@ -155,13 +157,13 @@ export class LoggerBuilder {
             })
         }
 
-        this.registerLogger(logger)
+        this.registerLogger(logger, targetContainer)
         return logger
     }
 
-    private registerLogger(logger: ILogger): void {
-        container.register(LOGGER_TOKEN, { useFactory: () => logger })
-        container.register(BaseLogger, { useFactory: () => logger })
+    private registerLogger(logger: ILogger, targetContainer: Container): void {
+        targetContainer.register(LOGGER_TOKEN, { useFactory: () => logger, override: true })
+        targetContainer.register(BaseLogger, { useFactory: () => logger, override: true })
         loggerInitialized = true
     }
 }
@@ -180,23 +182,23 @@ export function createLogger(): LoggerBuilder {
  * Get the registered logger from DI container.
  * 
  * @throws Error if logger has not been initialized yet.
- * Call createLogger().build() or use createBootify().useLogger() first.
+ * Call createLogger().build() or use createBootifyApp().useLogger() first.
  */
 export function getLogger(): ILogger {
     if (!loggerInitialized) {
         try {
-            const logger = container.resolve<ILogger>(LOGGER_TOKEN)
+            const logger = globalContainer.resolve<ILogger>(LOGGER_TOKEN)
             loggerInitialized = true
             return logger
         } catch {
             throw new Error(
                 '[BootifyJS] Logger not initialized. ' +
-                'Make sure to call createBootify().build() or createLogger().build() before using getLogger(). ' +
+                'Make sure to call createBootifyApp().build() or createLogger().build() before using getLogger(). ' +
                 'If using BootifyApp, getLogger() can only be called in beforeStart/afterStart hooks or after build() completes.'
             )
         }
     }
-    return container.resolve<ILogger>(LOGGER_TOKEN)
+    return globalContainer.resolve<ILogger>(LOGGER_TOKEN)
 }
 
 /**
@@ -205,7 +207,7 @@ export function getLogger(): ILogger {
 export function isLoggerInitialized(): boolean {
     if (loggerInitialized) return true
     try {
-        container.resolve<ILogger>(LOGGER_TOKEN)
+        globalContainer.resolve<ILogger>(LOGGER_TOKEN)
         loggerInitialized = true
         return true
     } catch {
@@ -218,5 +220,9 @@ export function isLoggerInitialized(): boolean {
  * @internal
  */
 export function resetLogger(): void {
+    // Also drop the container bindings made by build(), so tests and HMR
+    // re-initialization start from a clean state.
+    globalContainer.unregister(LOGGER_TOKEN)
+    globalContainer.unregister(BaseLogger)
     loggerInitialized = false
 }
